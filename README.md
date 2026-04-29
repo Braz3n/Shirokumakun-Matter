@@ -12,6 +12,109 @@ from an SCD40 sensor.
 | 1  | Thermostat + Fan | Thermostat, Fan Control |
 | 2  | Humidity Sensor | Relative Humidity Measurement |
 | 3  | Air Quality Sensor | Air Quality, CO2 Concentration |
+| 4  | Contact Sensor (dynamic) | Descriptor, Identify, Boolean State |
+
+EP4 is a **dynamic endpoint** (no ZAP entry) representing IR ACK status — closed = OK, open = failed after retries.
+
+## Adding a Dynamic Endpoint
+
+Static endpoints are declared in `ac_controller.zap` and codegen'd into `zap-generated/`. Dynamic endpoints skip ZAP entirely and are registered at runtime with `emberAfSetDynamicEndpoint()`. Use this pattern when the endpoint count isn't fixed at build time, or when you want to keep a subsystem self-contained.
+
+### Checklist
+
+**1. `chip_project_config.h` — raise the dynamic endpoint count**
+```cpp
+#define CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT 1  // increment if adding more
+```
+
+**2. Declare attribute lists and cluster list**
+
+Every endpoint needs the **Descriptor cluster** in its cluster list. Without it the commissioner can't enumerate device type or server clusters and the endpoint won't appear in Apple Home / chip-tool even though `emberAfSetDynamicEndpoint` logs success.
+
+```cpp
+// Descriptor — attributes are ARRAY; DescriptorAttrAccess (AttributeAccessInterface)
+// serves the actual data automatically from the cluster list. Size 254 is conventional.
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(descriptorAttrs)
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::DeviceTypeList::Id, ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ServerList::Id,     ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ClientList::Id,     ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::PartsList::Id,      ARRAY, 254, 0),
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+// Per-cluster attribute lists — use ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE) for each
+// attribute so reads/writes are routed to emberAfExternalAttributeReadCallback /
+// emberAfExternalAttributeWriteCallback. DECLARE_DYNAMIC_ATTRIBUTE_LIST_END()
+// automatically appends ClusterRevision (0xFFFD) and FeatureMap (0xFFFC) as
+// EXTERNAL_STORAGE, so handle those IDs in the read callback too.
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(myClusterAttrs)
+    DECLARE_DYNAMIC_ATTRIBUTE(MyCluster::Attributes::Foo::Id, BOOLEAN, 1,
+                              ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE)),
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(myClusters)
+    DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs,
+                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
+    DECLARE_DYNAMIC_CLUSTER(Identify::Id,   identifyAttrs,
+                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
+    DECLARE_DYNAMIC_CLUSTER(MyCluster::Id,  myClusterAttrs,
+                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
+DECLARE_DYNAMIC_CLUSTER_LIST_END;
+
+DECLARE_DYNAMIC_ENDPOINT(myEndpoint, myClusters);
+```
+
+**3. DataVersion array — one entry per cluster**
+```cpp
+// Must match the number of clusters in myClusters (including Descriptor + Identify)
+static DataVersion gDataVersions[3];
+```
+Getting this count wrong causes silent stack corruption. Count the `DECLARE_DYNAMIC_CLUSTER` lines.
+
+**4. Implement `emberAfExternalAttributeReadCallback`**
+
+The SDK provides weak no-op defaults that return `Failure`. Override them in your `.cpp`:
+```cpp
+chip::Protocols::InteractionModel::Status
+emberAfExternalAttributeReadCallback(chip::EndpointId endpoint,
+                                     chip::ClusterId clusterId,
+                                     const EmberAfAttributeMetadata *attributeMetadata,
+                                     uint8_t *buffer, uint16_t maxReadLength)
+{
+    if (endpoint != MY_EP) return Status::Failure;
+    chip::AttributeId attrId = attributeMetadata->attributeId;
+
+    // ClusterRevision / FeatureMap appended by DECLARE_DYNAMIC_ATTRIBUTE_LIST_END()
+    if (attrId == 0xFFFD) { uint16_t r = MY_REVISION; memcpy(buffer, &r, 2); return Status::Success; }
+    if (attrId == 0xFFFC) { uint32_t f = 0;           memcpy(buffer, &f, 4); return Status::Success; }
+
+    // ... your cluster attributes ...
+    return Status::Failure;
+}
+```
+The `emberAfExternalAttributeReadCallback` / `emberAfExternalAttributeWriteCallback` are **global** — if you have multiple dynamic endpoints, gate on `endpoint` first. The Descriptor cluster attributes are **not** routed here (they go through `DescriptorAttrAccess` directly), so you don't need to handle cluster 0x001D.
+
+**5. Register after `StartServer()`**
+```cpp
+// Must be called after Nrf::Matter::StartServer(). Lock the stack.
+PlatformMgr().LockChipStack();
+CHIP_ERROR err = emberAfSetDynamicEndpoint(
+    0,          // slot index (0-based, up to CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT-1)
+    MY_EP_ID,   // endpoint id (must not conflict with static endpoints)
+    &myEndpoint,
+    Span<DataVersion>(gDataVersions),
+    Span<const EmberAfDeviceType>(kMyDeviceType));
+PlatformMgr().UnlockChipStack();
+```
+
+**6. Updating attributes from application code**
+
+Use the cluster accessor, not direct RAM writes:
+```cpp
+PlatformMgr().LockChipStack();
+MyCluster::Attributes::Foo::Set(MY_EP_ID, value);
+PlatformMgr().UnlockChipStack();
+```
+This routes through `emberAfExternalAttributeWriteCallback`, updates your backing variable, and automatically triggers subscription reports to controllers.
 
 ## Hardware
 
@@ -146,7 +249,8 @@ src/
   ir_driver.cpp/h            nRF52840 PWM 38kHz carrier
   ir_protocol.cpp/h          Hitachi Shirokuma-kun encoding
   scd40_manager.cpp/h        SCD40 I2C driver, Matter attribute updates
-  chip_project_config.h      CHIP project config (empty)
+  pdm_manager.cpp/h          PDM mic, 2kHz Goertzel, dynamic EP4 (Contact Sensor)
+  chip_project_config.h      CHIP project config (dynamic endpoint count)
   ac_controller.zap          ZAP data model definition
   ac_controller.matter       Generated .matter IDL
   zap-generated/             Auto-generated cluster code

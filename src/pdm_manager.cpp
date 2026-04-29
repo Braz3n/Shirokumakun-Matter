@@ -11,6 +11,16 @@
  *
  * Matter: dynamic endpoint 4, Contact Sensor (device type 0x0015),
  *         Boolean State cluster — StateValue true = "Open" (failed).
+ *
+ * Dynamic endpoint attribute storage:
+ *   All cluster-specific attributes are EXTERNAL_STORAGE.  Reads and writes
+ *   are served by emberAfExternalAttributeReadCallback /
+ *   emberAfExternalAttributeWriteCallback below.  Global attributes
+ *   (ClusterRevision, FeatureMap) are added as EXTERNAL_STORAGE by
+ *   DECLARE_DYNAMIC_ATTRIBUTE_LIST_END() and handled the same way.
+ *
+ *   ir_driver.cpp updates StateValue via BooleanState::Attributes::StateValue::Set(4, v),
+ *   which routes through the write callback and then triggers subscription reports.
  */
 
 #include "pdm_manager.h"
@@ -19,12 +29,14 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/irq.h>
+#include <cstring>
 
 #include <nrfx_pdm.h>
 #include <hal/nrf_gpio.h>
 
 #include <app/util/attribute-storage.h>
 #include <platform/CHIPDeviceLayer.h>
+#include <protocols/interaction_model/StatusCode.h>
 
 LOG_MODULE_REGISTER(pdm_mgr, LOG_LEVEL_INF);
 
@@ -57,6 +69,10 @@ static struct k_work pdm_process_work;
 static struct k_sem  ack_sem;
 static volatile bool pdm_capture_active;
 
+/* Backing store for BooleanState::StateValue on EP4.
+ * Written via emberAfExternalAttributeWriteCallback from Set(4, ...) in ir_driver.cpp. */
+static bool ep4_state_value = false;
+
 /* nrfx_pdm instance (nrfx >= 3.7.0 multi-instance API) */
 static const nrfx_pdm_t pdm_inst = NRFX_PDM_INSTANCE(0);
 
@@ -71,18 +87,126 @@ using namespace chip::DeviceLayer;
 
 /* Contact Sensor device type 0x0015, revision 1 */
 static const EmberAfDeviceType kContactSensorDeviceType[] = {{ 0x0015, 1 }};
-static DataVersion gAlarmDataVersions[1];
+static DataVersion gAlarmDataVersions[3]; /* one per cluster: Descriptor + Identify + BooleanState */
+
+/* All cluster-specific attributes are EXTERNAL_STORAGE — no dynamic RAM backing.
+ * DECLARE_DYNAMIC_ATTRIBUTE_LIST_END() appends ClusterRevision + FeatureMap,
+ * also as EXTERNAL_STORAGE, automatically. */
+
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(descriptorAttrs)
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::DeviceTypeList::Id, ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ServerList::Id,     ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ClientList::Id,     ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::PartsList::Id,      ARRAY, 254, 0),
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(identifyAttrs)
+    DECLARE_DYNAMIC_ATTRIBUTE(Identify::Attributes::IdentifyTime::Id, INT16U, 2,
+                              ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE) | ZAP_ATTRIBUTE_MASK(WRITABLE)),
+    DECLARE_DYNAMIC_ATTRIBUTE(Identify::Attributes::IdentifyType::Id, ENUM8, 1,
+                              ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE)),
+DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
 
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(boolStateAttrs)
-    DECLARE_DYNAMIC_ATTRIBUTE(BooleanState::Attributes::StateValue::Id, BOOLEAN, 1, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(BooleanState::Attributes::StateValue::Id, BOOLEAN, 1,
+                              ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE)),
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
 
 DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(alarmClusters)
+    DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs,
+                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
+    DECLARE_DYNAMIC_CLUSTER(Identify::Id, identifyAttrs,
+                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
     DECLARE_DYNAMIC_CLUSTER(BooleanState::Id, boolStateAttrs,
                             ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
 DECLARE_DYNAMIC_CLUSTER_LIST_END;
 
 DECLARE_DYNAMIC_ENDPOINT(alarmEndpoint, alarmClusters);
+
+/* --------------------------------------------------------------------------
+ * External attribute callbacks — serve all EP4 attributes from local state.
+ * These override the weak defaults in the CHIP SDK (which return FAILURE).
+ * -------------------------------------------------------------------------- */
+
+using chip::Protocols::InteractionModel::Status;
+
+chip::Protocols::InteractionModel::Status
+emberAfExternalAttributeReadCallback(chip::EndpointId endpoint,
+                                     chip::ClusterId clusterId,
+                                     const EmberAfAttributeMetadata *attributeMetadata,
+                                     uint8_t *buffer,
+                                     uint16_t maxReadLength)
+{
+    if (endpoint != 4) {
+        return Status::Failure;
+    }
+
+    chip::AttributeId attrId = attributeMetadata->attributeId;
+
+    /* Global attributes appended by DECLARE_DYNAMIC_ATTRIBUTE_LIST_END() */
+    if (attrId == 0xFFFD) { /* ClusterRevision */
+        /* Identify cluster revision 4 (Matter 1.0); BooleanState revision 1 */
+        uint16_t rev = (clusterId == Identify::Id) ? 4u : 1u;
+        std::memcpy(buffer, &rev, sizeof(rev));
+        return Status::Success;
+    }
+    if (attrId == 0xFFFC) { /* FeatureMap */
+        uint32_t fm = 0;
+        std::memcpy(buffer, &fm, sizeof(fm));
+        return Status::Success;
+    }
+
+    /* Identify cluster — static no-op responses */
+    if (clusterId == Identify::Id) {
+        if (attrId == Identify::Attributes::IdentifyTime::Id) {
+            uint16_t val = 0;
+            std::memcpy(buffer, &val, sizeof(val));
+            return Status::Success;
+        }
+        if (attrId == Identify::Attributes::IdentifyType::Id) {
+            *buffer = static_cast<uint8_t>(Identify::IdentifyTypeEnum::kNone);
+            return Status::Success;
+        }
+    }
+
+    /* BooleanState cluster */
+    if (clusterId == BooleanState::Id &&
+        attrId == BooleanState::Attributes::StateValue::Id) {
+        *buffer = ep4_state_value ? 1 : 0;
+        return Status::Success;
+    }
+
+    return Status::Failure;
+}
+
+chip::Protocols::InteractionModel::Status
+emberAfExternalAttributeWriteCallback(chip::EndpointId endpoint,
+                                      chip::ClusterId clusterId,
+                                      const EmberAfAttributeMetadata *attributeMetadata,
+                                      uint8_t *buffer)
+{
+    if (endpoint != 4) {
+        return Status::Failure;
+    }
+
+    chip::AttributeId attrId = attributeMetadata->attributeId;
+
+    /* Accept IdentifyTime writes silently (no-op identify) */
+    if (clusterId == Identify::Id &&
+        attrId == Identify::Attributes::IdentifyTime::Id) {
+        return Status::Success;
+    }
+
+    /* StateValue written by ir_driver.cpp via BooleanState::Attributes::StateValue::Set(4, v).
+     * After this callback returns SUCCESS, the stack automatically triggers subscription reports. */
+    if (clusterId == BooleanState::Id &&
+        attrId == BooleanState::Attributes::StateValue::Id) {
+        ep4_state_value = (*buffer != 0);
+        return Status::Success;
+    }
+
+    return Status::Failure;
+}
 
 /* --------------------------------------------------------------------------
  * Goertzel tone detector — runs in system workqueue

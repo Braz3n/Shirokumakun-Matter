@@ -20,10 +20,10 @@ build:
 pristine:
 	$(WEST) build --pristine -b $(BOARD) .
 
-flash:
+flash: build
 	$(WEST) flash --build-dir $(BUILD_DIR)
 
-flash-erase:
+flash-erase: build
 	$(WEST) flash --build-dir $(BUILD_DIR) --erase
 
 attach:
