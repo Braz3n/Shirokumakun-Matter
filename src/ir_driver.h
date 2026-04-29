@@ -28,3 +28,11 @@ int ir_driver_init(void);
  * for a full Hitachi frame).
  */
 void ir_transmit(const struct IrPulse *pulses, uint16_t count);
+
+/**
+ * Transmit a command with up to IR_RETRY_COUNT attempts, waiting for a
+ * 2kHz PDM ACK from the AC unit after each attempt.
+ * Updates EP4 (Contact Sensor): false = ACK received, true = all attempts failed.
+ * Returns true if ACK was received, false if all retries exhausted.
+ */
+bool ir_send_command(const struct IrPulse *pulses, uint16_t count);

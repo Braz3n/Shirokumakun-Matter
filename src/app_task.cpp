@@ -9,6 +9,7 @@
 #include "app_task.h"
 #include "ir_driver.h"
 #include "scd40_manager.h"
+#include "pdm_manager.h"
 
 #include "app/matter_init.h"
 #include "app/task_executor.h"
@@ -63,6 +64,10 @@ CHIP_ERROR AppTask::Init()
 	if (ret) {
 		LOG_ERR("SCD40 init failed: %d (sensor may not be connected)", ret);
 	}
+
+	/* Initialize PDM microphone (2kHz beep detection → Matter Contact Sensor EP4).
+	 * Must be called after StartServer() so the dynamic endpoint can register. */
+	pdm_manager_init();
 
 	/* Enable IR transmission now that init is complete.
 	 * This prevents MatterPostAttributeChangeCallback from firing

@@ -1,0 +1,80 @@
+/*
+ * Devicetree overlay for Seeed XIAO BLE Sense — Matter AC Controller
+ *
+ * Extends the base XIAO BLE settings with PDM microphone enablement.
+ * All other settings (I2C remap, USB disable, PWM0 disable, flash reclaim)
+ * are identical to xiao_ble_nrf52840.overlay.
+ *
+ * PDM pinctrl (pdm0_default / pdm0_sleep) is already defined in:
+ *   zephyr/boards/seeed/xiao_ble/xiao_ble-pinctrl.dtsi (lines 55–68)
+ * We only need to set status = "okay" here.
+ */
+
+/* Remap I2C0 pins to P0.04/P0.05 (board default is P0.07/P0.27 for
+ * the Sense variant's IMU) and enable internal pull-ups. */
+&pinctrl {
+    i2c0_default: i2c0_default {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SDA, 0, 4)>,
+                    <NRF_PSEL(TWIM_SCL, 0, 5)>;
+            bias-pull-up;
+        };
+    };
+    i2c0_sleep: i2c0_sleep {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SDA, 0, 4)>,
+                    <NRF_PSEL(TWIM_SCL, 0, 5)>;
+            low-power-enable;
+        };
+    };
+};
+
+&i2c0 {
+    status = "okay";
+    clock-frequency = <I2C_BITRATE_STANDARD>;
+    pinctrl-0 = <&i2c0_default>;
+    pinctrl-1 = <&i2c0_sleep>;
+    pinctrl-names = "default", "sleep";
+
+};
+
+/* Disable USB — we use J-Link + RTT for debug */
+&usbd { status = "disabled"; };
+
+/* Disable Zephyr PWM0 — the IR driver configures NRF_PWM0 registers
+ * directly to work around the polarity trick needed for 0% duty. */
+&pwm0 { status = "disabled"; };
+
+/* Reclaim SoftDevice + bootloader flash for application code.
+ * Default layout:  code 0x27000-0xEC000 (804KB), storage 0xEC000-0xF4000 (32KB)
+ * New layout:      code 0x00000-0xF0000 (960KB), storage 0xF0000-0x100000 (64KB)
+ *
+ * Delete the old partitions node first, then redefine.
+ */
+&flash0 {
+    /delete-node/ partitions;
+};
+
+&flash0 {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        code_partition: partition@0 {
+            label = "code_partition";
+            reg = <0x00000000 0x000F0000>;
+        };
+
+        storage_partition: partition@f0000 {
+            label = "storage";
+            reg = <0x000F0000 0x00010000>;
+        };
+    };
+};
+
+/* Enable PDM0 — pinctrl already defined in xiao_ble-pinctrl.dtsi.
+ * The Sense board DTS sets clock-source and pinctrl; we only add status. */
+&pdm0 {
+    status = "okay";
+};

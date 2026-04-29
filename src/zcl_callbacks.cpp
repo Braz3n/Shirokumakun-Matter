@@ -138,7 +138,7 @@ static void send_ir_if_changed(void)
 	/* Encode and transmit */
 	static struct IrPulse pulses[IR_MAX_PULSES];
 	uint16_t count = ac_encode_pulses(&state, pulses);
-	ir_transmit(pulses, count);
+	ir_send_command(pulses, count);
 
 	last_sent = state;
 	last_sent_valid = true;

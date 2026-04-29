@@ -13,13 +13,23 @@
  */
 
 #include "ir_driver.h"
+#include "pdm_manager.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <nrfx_pwm.h>
 #include <hal/nrf_pwm.h>
 
+#include <app-common/zap-generated/attributes/Accessors.h>
+#include <platform/CHIPDeviceLayer.h>
+
 LOG_MODULE_REGISTER(ir_driver, CONFIG_LOG_DEFAULT_LEVEL);
+
+using namespace chip::app::Clusters;
+using namespace chip::DeviceLayer;
+
+#define IR_RETRY_COUNT    3
+#define IR_ACK_TIMEOUT_MS 1000
 
 /* 38kHz carrier constants (PWM clock = 16MHz, prescaler DIV_1) */
 static const uint16_t ir_countertop = 421U; /* 16 000 000 / 38 000 ≈ 421 → 38 004 Hz */
@@ -110,4 +120,28 @@ void ir_transmit(const struct IrPulse *pulses, uint16_t count)
 	load_duty();
 
 	LOG_INF("IR: transmission complete");
+}
+
+static void update_ep4_state(bool failed)
+{
+	PlatformMgr().LockChipStack();
+	BooleanState::Attributes::StateValue::Set(4, failed);
+	PlatformMgr().UnlockChipStack();
+}
+
+bool ir_send_command(const struct IrPulse *pulses, uint16_t count)
+{
+	for (int attempt = 1; attempt <= IR_RETRY_COUNT; attempt++) {
+		pdm_manager_start_listen();
+		ir_transmit(pulses, count);
+		if (pdm_manager_collect_ack(IR_ACK_TIMEOUT_MS)) {
+			LOG_INF("IR: ACK received on attempt %d/%d", attempt, IR_RETRY_COUNT);
+			update_ep4_state(false);
+			return true;
+		}
+		LOG_WRN("IR: no ACK on attempt %d/%d", attempt, IR_RETRY_COUNT);
+	}
+	LOG_ERR("IR: command failed after %d attempts", IR_RETRY_COUNT);
+	update_ep4_state(true);
+	return false;
 }
