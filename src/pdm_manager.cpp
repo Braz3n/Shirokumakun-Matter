@@ -55,7 +55,7 @@ LOG_MODULE_REGISTER(pdm_mgr, LOG_LEVEL_INF);
 
 #define PDM_BUF_SAMPLES   1024
 #define GOERTZEL_COEFF    1.42288f      /* 2*cos(2*pi*2000/16125) exact 2kHz, N-independent */
-#define DETECT_THRESHOLD  0.1f          /* normalized power — tune empirically */
+static float detect_threshold = 0.1f;  /* normalized power — tune empirically */
 
 /* --------------------------------------------------------------------------
  * State
@@ -68,6 +68,8 @@ static volatile bool    buf_available;
 static struct k_work pdm_process_work;
 static struct k_sem  ack_sem;
 static volatile bool pdm_capture_active;
+static volatile bool goertzel_verbose         = false;
+static volatile bool goertzel_verbose_pdm_own = false;
 
 /* Backing store for BooleanState::StateValue on EP4.
  * Written via emberAfExternalAttributeWriteCallback from Set(4, ...) in ir_driver.cpp. */
@@ -212,7 +214,7 @@ emberAfExternalAttributeWriteCallback(chip::EndpointId endpoint,
  * Goertzel tone detector — runs in system workqueue
  * -------------------------------------------------------------------------- */
 
-static bool goertzel_detect_2khz(const int16_t *samples, int n)
+static float goertzel_power(const int16_t *samples, int n)
 {
     float s1 = 0.0f, s2 = 0.0f;
 
@@ -224,11 +226,7 @@ static bool goertzel_detect_2khz(const int16_t *samples, int n)
 
     float power = s2 * s2 + s1 * s1 - GOERTZEL_COEFF * s1 * s2;
     /* Normalize by (N * full_scale)^2 so result is independent of N */
-    float norm = power / ((float)n * 32768.0f * (float)n * 32768.0f);
-
-    LOG_DBG("Goertzel (x1e6): %.4f", (double)(norm * 1e6f));
-
-    return norm > DETECT_THRESHOLD;
+    return power / ((float)n * 32768.0f * (float)n * 32768.0f);
 }
 
 /* --------------------------------------------------------------------------
@@ -239,7 +237,7 @@ static void pdm_process_work_handler(struct k_work *work)
 {
     ARG_UNUSED(work);
 
-    if (!pdm_capture_active || !buf_available) {
+    if (!buf_available) {
         return;
     }
 
@@ -249,9 +247,15 @@ static void pdm_process_work_handler(struct k_work *work)
     buf_available = false;
     irq_unlock(key);
 
-    bool tone_present = goertzel_detect_2khz(pdm_buf[idx], PDM_BUF_SAMPLES);
+    float norm = goertzel_power(pdm_buf[idx], PDM_BUF_SAMPLES);
+    LOG_DBG("Goertzel (x1e6): %.4f", (double)(norm * 1e6f));
 
-    if (tone_present) {
+    if (goertzel_verbose) {
+        LOG_INF("PDM power x1e6: %.1f%s", (double)(norm * 1e6f),
+                norm > detect_threshold ? "  [ABOVE THRESHOLD]" : "");
+    }
+
+    if (pdm_capture_active && norm > detect_threshold) {
         LOG_INF("PDM: ACK detected");
         k_sem_give(&ack_sem);
     }
@@ -369,3 +373,29 @@ void pdm_manager_init(void)
     LOG_INF("PDM: Dynamic endpoint 4 registered (Contact Sensor / Boolean State)");
     LOG_INF("PDM: Initialized — capture starts on demand");
 }
+
+void pdm_manager_verbose_start(void)
+{
+    goertzel_verbose = true;
+    if (!pdm_capture_active) {
+        nrfx_err_t err = nrfx_pdm_start(&pdm_inst);
+        if (err == NRFX_SUCCESS) {
+            goertzel_verbose_pdm_own = true;
+        } else {
+            LOG_ERR("PDM: verbose start failed: 0x%x", err);
+        }
+    }
+    /* if pdm_capture_active, PDM is already running — verbose piggybacks */
+}
+
+void pdm_manager_verbose_stop(void)
+{
+    goertzel_verbose = false;
+    if (goertzel_verbose_pdm_own) {
+        nrfx_pdm_stop(&pdm_inst);
+        goertzel_verbose_pdm_own = false;
+    }
+}
+
+void  pdm_manager_set_threshold(float t) { detect_threshold = t; }
+float pdm_manager_get_threshold(void)    { return detect_threshold; }

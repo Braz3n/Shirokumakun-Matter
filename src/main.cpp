@@ -5,11 +5,14 @@
 #include "app_task.h"
 
 #include <zephyr/logging/log.h>
+#include <zephyr/usb/usb_device.h>
 
 LOG_MODULE_REGISTER(app, CONFIG_MATTER_LOG_LEVEL);
 
 int main()
 {
+	usb_enable(NULL);
+
 	CHIP_ERROR err = AppTask::Instance().StartApp();
 
 	LOG_ERR("Exited with code %" CHIP_ERROR_FORMAT, err.Format());

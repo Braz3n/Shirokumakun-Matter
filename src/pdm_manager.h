@@ -21,3 +21,8 @@
 void pdm_manager_init(void);
 void pdm_manager_start_listen(void);
 bool pdm_manager_collect_ack(uint32_t timeout_ms);
+
+void  pdm_manager_verbose_start(void);
+void  pdm_manager_verbose_stop(void);
+void  pdm_manager_set_threshold(float t);
+float pdm_manager_get_threshold(void);

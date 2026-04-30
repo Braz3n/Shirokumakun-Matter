@@ -1,0 +1,5 @@
+// Clear DEMCR.VC_CORERESET (bit 0) so future resets don't halt the CPU,
+// then resume execution. Run after west flash to avoid needing a power cycle.
+W4 E000EDFC 0
+g
+q

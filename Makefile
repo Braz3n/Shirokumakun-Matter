@@ -20,11 +20,16 @@ build:
 pristine:
 	$(WEST) build --pristine -b $(BOARD) .
 
+JLINK := JLinkExe
+JLINK_FLAGS := -nogui 1 -if SWD -speed 4000 -device NRF52840_xxAA -autoconnect 1
+
 flash: build
 	$(WEST) flash --build-dir $(BUILD_DIR)
+	$(JLINK) $(JLINK_FLAGS) -CommanderScript scripts/jlink_go.jlink
 
 flash-erase: build
 	$(WEST) flash --build-dir $(BUILD_DIR) --erase
+	$(JLINK) $(JLINK_FLAGS) -CommanderScript scripts/jlink_go.jlink
 
 attach:
 	$(WEST) attach

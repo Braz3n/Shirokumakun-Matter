@@ -34,8 +34,8 @@
     pinctrl-names = "default", "sleep";
 };
 
-/* Disable USB — we use J-Link + RTT for debug */
-&usbd { status = "disabled"; };
+/* Enable USB-CDC for shell console */
+&usbd { status = "okay"; };
 
 /* Disable Zephyr PWM0 — the IR driver configures NRF_PWM0 registers
  * directly to work around the polarity trick needed for 0% duty. */

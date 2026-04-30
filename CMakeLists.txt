@@ -35,6 +35,7 @@ target_sources(app PRIVATE
     src/ir_protocol.cpp
     src/scd40_manager.cpp
     src/pdm_manager.cpp
+    src/shell_commands.cpp
 )
 
 chip_configure_data_model(app
