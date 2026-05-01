@@ -68,11 +68,9 @@ int ir_driver_init(void)
 	NRF_PWM0->SEQ[0].REFRESH = 0;
 	NRF_PWM0->SEQ[0].ENDDELAY = 0;
 
-	/* Connect channel 0 to P0.03 (IR LED).
-	 * The pin configuration is also done in the DTS overlay,
-	 * but we set it here explicitly to be safe. */
+	/* Connect channel 0 to P0.02 (IR LED). */
 	NRF_PWM0->PSEL.OUT[0] = (0 << PWM_PSEL_OUT_PORT_Pos) |  /* Port 0 */
-				 (3 << PWM_PSEL_OUT_PIN_Pos)  |   /* Pin 3 */
+				 (2 << PWM_PSEL_OUT_PIN_Pos)  |   /* Pin 2 */
 				 (PWM_PSEL_OUT_CONNECT_Connected << PWM_PSEL_OUT_CONNECT_Pos);
 	NRF_PWM0->PSEL.OUT[1] = PWM_PSEL_OUT_CONNECT_Disconnected << PWM_PSEL_OUT_CONNECT_Pos;
 	NRF_PWM0->PSEL.OUT[2] = PWM_PSEL_OUT_CONNECT_Disconnected << PWM_PSEL_OUT_CONNECT_Pos;
@@ -85,7 +83,7 @@ int ir_driver_init(void)
 	NRF_PWM0->TASKS_SEQSTART[0] = 1;
 	while (!NRF_PWM0->EVENTS_SEQEND[0]) {}
 
-	LOG_INF("IR driver initialised (P0.03, 38kHz)");
+	LOG_INF("IR driver initialised (P0.02, 38kHz)");
 	return 0;
 }
 
