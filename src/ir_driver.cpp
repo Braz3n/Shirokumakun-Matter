@@ -29,7 +29,7 @@ LOG_MODULE_REGISTER(ir_driver, CONFIG_LOG_DEFAULT_LEVEL);
 using namespace chip::app::Clusters;
 using namespace chip::DeviceLayer;
 
-#define IR_RETRY_COUNT    100
+#define IR_RETRY_COUNT    10
 #define IR_ACK_TIMEOUT_MS 1000
 
 /* 38kHz carrier constants (PWM clock = 16MHz, prescaler DIV_1) */
