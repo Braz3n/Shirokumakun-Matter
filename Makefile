@@ -44,7 +44,7 @@ DFU_PORT := $(shell for d in /dev/ttyACM*; do \
 dfu:
 	@test -n "$(DFU_PORT)" || (echo "ERROR: Zephyr DFU port not found"; exit 1)
 	mcumgr-client -d $(DFU_PORT) -m 1024 -l 512 upload build/matter-ac-ncs/zephyr/zephyr.signed.bin
-	@hash=$$(mcumgr-client -d $(DFU_PORT) list 2>/dev/null | jq -r '.images[] | select(.slot==1) | .hash'); \
+	@hash=$$(mcumgr-client -d $(DFU_PORT) list 2>/dev/null | awk '/^response:/{sub(/^response: /,""); p=1} p' | jq -r '.images[] | select(.slot==1) | .hash'); \
 	test -n "$$hash" || (echo "ERROR: could not read slot 1 hash"; exit 1); \
 	mcumgr-client -d $(DFU_PORT) test $$hash; \
 	mcumgr-client -d $(DFU_PORT) reset
