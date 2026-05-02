@@ -1,0 +1,16 @@
+manifest:
+  version: "0.13"
+
+  remotes:
+    - name: nrfconnect
+      url-base: https://github.com/nrfconnect
+
+  projects:
+    - name: nrf
+      remote: nrfconnect
+      repo-path: sdk-nrf
+      revision: v2.9.2
+      import: true
+
+  self:
+    path: matter-ac-ncs

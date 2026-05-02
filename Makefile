@@ -1,3 +1,6 @@
+# Toolchain path — installed by nRF Connect Toolchain Manager for NCS v2.9.2.
+# On a fresh machine: nrfutil toolchain-manager install --ncs-version v2.9.2
+# The hash (7795df4459) identifies the toolchain bundle; adjust path to match your install.
 TC := /home/zane/ncs/toolchains/7795df4459
 WEST := $(TC)/usr/local/bin/west
 
@@ -14,7 +17,7 @@ BUILD_DIR := build
 
 SRCS := $(wildcard src/*.cpp src/*.c)
 
-.PHONY: build pristine flash flash-erase attach format
+.PHONY: build pristine flash flash-erase attach format init
 
 build:
 	$(WEST) build -b $(BOARD) .
@@ -38,6 +41,12 @@ attach:
 
 format:
 	clang-format -i $(SRCS)
+
+# Bootstrap a fresh workspace — uses system west, not the toolchain-bundled one.
+# Prerequisites: pip install west && nrfutil toolchain-manager install --ncs-version v2.9.2
+init:
+	west init -l .
+	west update
 
 # DFU over USB-CDC ACM1 using mcumgr-client: https://github.com/vouch-opensource/mcumgr-client
 DFU_PORT := $(shell for d in /dev/ttyACM*; do \
