@@ -19,9 +19,9 @@
 #define WAKEUP_SPACE  49500U
 #define HEADER_MARK    3380U
 #define HEADER_SPACE   1700U
-#define BIT_MARK        530U
-#define ONE_SPACE      1100U
-#define ZERO_SPACE      300U
+#define BIT_MARK        384U   /* 26us load_duty overhead + 384 ~= 410us total */
+#define ONE_SPACE      1234U   /* 26us + 1234 ~= 1260us total */
+#define ZERO_SPACE      399U   /* 26us +  399 ~= 425us total */
 #define TRAIL_MARK     BIT_MARK
 
 /* Build the 25-byte raw data buffer for the Hitachi protocol. */
