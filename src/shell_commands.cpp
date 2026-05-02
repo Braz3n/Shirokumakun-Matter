@@ -3,7 +3,7 @@
  *
  * ac reset     — factory reset (clear fabrics) and reboot
  * ac qr        — reprint QR code and manual pairing code
- * ac goertzel  — stream Goertzel 2kHz power readings on|off
+ * ac cfar      — stream CFAR power readings on|off
  * ac threshold — get or set ACK detection threshold
  */
 
@@ -41,8 +41,8 @@ static int cmd_qr(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
-/* ac goertzel on|off — stream Goertzel power via LOG_INF (~64ms per sample) */
-static int cmd_goertzel(const struct shell *sh, size_t argc, char **argv)
+/* ac cfar on|off — stream CFAR power via LOG_INF (~64ms per sample) */
+static int cmd_cfar(const struct shell *sh, size_t argc, char **argv)
 {
     if (argc < 2) {
         shell_help(sh);
@@ -50,25 +50,22 @@ static int cmd_goertzel(const struct shell *sh, size_t argc, char **argv)
     }
     if (strcmp(argv[1], "on") == 0) {
         pdm_manager_verbose_start();
-        shell_print(sh, "Goertzel verbose ON  (threshold x1e6: %.1f)",
-                    (double)(pdm_manager_get_threshold() * 1e6f));
+        shell_print(sh, "CFAR verbose ON  (multiplier: %.1fx)", (double)pdm_manager_get_threshold());
     } else if (strcmp(argv[1], "off") == 0) {
         pdm_manager_verbose_stop();
-        shell_print(sh, "Goertzel verbose OFF");
+        shell_print(sh, "CFAR verbose OFF");
     } else {
-        shell_error(sh, "usage: ac goertzel on|off");
+        shell_error(sh, "usage: ac cfar on|off");
         return -EINVAL;
     }
     return 0;
 }
 
-/* ac threshold [value] — get or set detection threshold (normalized power; x1e6 units shown) */
+/* ac threshold [value] — get or set CFAR multiplier (N× above noise floor) */
 static int cmd_threshold(const struct shell *sh, size_t argc, char **argv)
 {
     if (argc == 1) {
-        shell_print(sh, "%.6f  (x1e6: %.1f)",
-                    (double)pdm_manager_get_threshold(),
-                    (double)(pdm_manager_get_threshold() * 1e6f));
+        shell_print(sh, "%.1f", (double)pdm_manager_get_threshold());
     } else {
         float t = (float)atof(argv[1]);
         if (t <= 0.0f) {
@@ -99,7 +96,7 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_ac,
     SHELL_CMD_ARG(off,        NULL, "Send power-off IR command",            cmd_off,       1, 0),
     SHELL_CMD_ARG(reset,     NULL, "Clear pairing state (factory reset)", cmd_reset,     1, 0),
     SHELL_CMD_ARG(qr,        NULL, "Print QR code and manual pairing code", cmd_qr,      1, 0),
-    SHELL_CMD_ARG(goertzel,  NULL, "Stream Goertzel power on|off",        cmd_goertzel,  2, 0),
+    SHELL_CMD_ARG(cfar,      NULL, "Stream CFAR power on|off",            cmd_cfar,      2, 0),
     SHELL_CMD_ARG(threshold, NULL, "Get/set ACK detect threshold [value]", cmd_threshold, 1, 1),
     SHELL_SUBCMD_SET_END
 );
@@ -111,7 +108,7 @@ static int cmd_ac(const struct shell *sh, size_t argc, char **argv)
     shell_print(sh, "  off        Send power-off IR command");
     shell_print(sh, "  reset      Clear pairing state (factory reset)");
     shell_print(sh, "  qr         Print QR code and manual pairing code");
-    shell_print(sh, "  goertzel   Stream Goertzel 2kHz power  on|off");
+    shell_print(sh, "  cfar       Stream CFAR power readings  on|off");
     shell_print(sh, "  threshold  Get/set ACK detection threshold [value]");
     return 0;
 }

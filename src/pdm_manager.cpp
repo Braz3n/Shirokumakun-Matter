@@ -6,8 +6,9 @@
  *   PDM DIN:    P0.16  (pinctrl pdm0_default in xiao_ble-pinctrl.dtsi)
  *   Mic Enable: P1.10  active HIGH — must be driven manually
  *
- * Algorithm: Goertzel for f=2000Hz, fs≈16125Hz (1.032MHz PDM / 64), N=1024
- *   coeff = 2*cos(2*pi*2000/16125) ≈ 1.42288  (exact frequency, N-independent)
+ * Algorithm: 1024-point real FFT (CMSIS-DSP arm_rfft_fast_f32) with Hanning window.
+ *   fs ≈ 16125 Hz (1.032 MHz PDM / 64), bin spacing ≈ 15.75 Hz, target bin 127 ≈ 2000 Hz.
+ *   CA-CFAR detection: CUT power vs. mean of training cells on either side of target bin.
  *
  * Matter: dynamic endpoint 4, Contact Sensor (device type 0x0015),
  *         Boolean State cluster — StateValue true = "Open" (failed).
@@ -33,6 +34,12 @@
 
 #include <nrfx_pdm.h>
 #include <hal/nrf_gpio.h>
+#include <arm_math.h>
+#include <math.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #include <app/util/attribute-storage.h>
 #include <platform/CHIPDeviceLayer.h>
@@ -53,10 +60,12 @@ LOG_MODULE_REGISTER(pdm_mgr, LOG_LEVEL_INF);
  * Detection constants
  * -------------------------------------------------------------------------- */
 
-#define PDM_BUF_SAMPLES   1024
-#define GOERTZEL_COEFF    1.42288f      /* 2*cos(2*pi*2000/16125) exact 2kHz, N-independent */
-#define GOERTZEL_SCALE_FACTOR 1e6f         /* scale applied before logging and threshold comparison */
-static float detect_threshold = 0.1f;  /* threshold in GOERTZEL_SCALE_FACTOR units */
+#define PDM_BUF_SAMPLES        1024
+#define PDM_TARGET_BIN         127   /* round(2000 * 1024 / 16125) — 2000 Hz */
+#define PDM_CFAR_GUARD_CELLS     2   /* bins each side excluded from noise estimate */
+#define PDM_CFAR_TRAIN_CELLS    10   /* bins each side used for noise estimate */
+#define PDM_SCALING_FACTOR     1e-6f   /* scale applied before logging */
+static float detect_threshold = 25.0f;  /* CFAR multiplier: N× above noise estimate */
 
 /* --------------------------------------------------------------------------
  * State
@@ -69,8 +78,13 @@ static volatile bool    buf_available;
 static struct k_work pdm_process_work;
 static struct k_sem  ack_sem;
 static volatile bool pdm_capture_active;
-static volatile bool goertzel_verbose         = false;
-static volatile bool goertzel_verbose_pdm_own = false;
+static volatile bool pdm_verbose     = false;
+static volatile bool pdm_verbose_own = false;
+
+static arm_rfft_fast_instance_f32 fft_inst;
+static float fft_in[PDM_BUF_SAMPLES];
+static float fft_out[PDM_BUF_SAMPLES];
+static float hann_window[PDM_BUF_SAMPLES];
 
 /* Backing store for BooleanState::StateValue on EP4.
  * Written via emberAfExternalAttributeWriteCallback from Set(4, ...) in ir_driver.cpp. */
@@ -212,26 +226,7 @@ emberAfExternalAttributeWriteCallback(chip::EndpointId endpoint,
 }
 
 /* --------------------------------------------------------------------------
- * Goertzel tone detector — runs in system workqueue
- * -------------------------------------------------------------------------- */
-
-static float goertzel_power(const int16_t *samples, int n)
-{
-    float s1 = 0.0f, s2 = 0.0f;
-
-    for (int i = 0; i < n; i++) {
-        float s = (float)samples[i] + GOERTZEL_COEFF * s1 - s2;
-        s2 = s1;
-        s1 = s;
-    }
-
-    float power = s2 * s2 + s1 * s1 - GOERTZEL_COEFF * s1 * s2;
-    /* Normalize by (N * full_scale)^2 so result is independent of N */
-    return power / ((float)n * 32768.0f * (float)n * 32768.0f);
-}
-
-/* --------------------------------------------------------------------------
- * Work handler — runs in system workqueue
+ * Work handler — FFT + CA-CFAR, runs in system workqueue
  * -------------------------------------------------------------------------- */
 
 static void pdm_process_work_handler(struct k_work *work)
@@ -242,22 +237,48 @@ static void pdm_process_work_handler(struct k_work *work)
         return;
     }
 
-    /* Snapshot index under brief critical section to match ISR write */
     unsigned int key = irq_lock();
     uint8_t idx = buf_ready_idx;
     buf_available = false;
     irq_unlock(key);
 
-    float norm = goertzel_power(pdm_buf[idx], PDM_BUF_SAMPLES);
-    LOG_DBG("Goertzel (x1e6): %.4f", (double)(norm * GOERTZEL_SCALE_FACTOR));
-
-    if (goertzel_verbose) {
-        LOG_INF("PDM power x1e6: %.1f%s", (double)(norm * GOERTZEL_SCALE_FACTOR),
-                norm * GOERTZEL_SCALE_FACTOR > detect_threshold ? "  [ABOVE THRESHOLD]" : "");
+    /* Apply Hanning window and convert to float */
+    for (int i = 0; i < PDM_BUF_SAMPLES; i++) {
+        fft_in[i] = (float)pdm_buf[idx][i] * hann_window[i];
     }
 
-    if (pdm_capture_active && norm * GOERTZEL_SCALE_FACTOR > detect_threshold) {
-        LOG_INF("PDM: ACK detected");
+    arm_rfft_fast_f32(&fft_inst, fft_in, fft_out, 0 /* forward */);
+
+    /* CUT: magnitude squared at target bin.
+     * arm_rfft_fast_f32 packs output as [Re0, ReN/2, Re1, Im1, Re2, Im2, ...] */
+    float re  = fft_out[2 * PDM_TARGET_BIN];
+    float im  = fft_out[2 * PDM_TARGET_BIN + 1];
+    float cut = re * re + im * im;
+
+    /* CA-CFAR: average training cells on both sides, skipping guard cells */
+    float noise_sum = 0.0f;
+    for (int k = PDM_TARGET_BIN - PDM_CFAR_GUARD_CELLS - PDM_CFAR_TRAIN_CELLS;
+         k <= PDM_TARGET_BIN + PDM_CFAR_GUARD_CELLS + PDM_CFAR_TRAIN_CELLS; k++) {
+        if (abs(k - PDM_TARGET_BIN) > PDM_CFAR_GUARD_CELLS) {
+            float r = fft_out[2 * k], im_k = fft_out[2 * k + 1];
+            noise_sum += r * r + im_k * im_k;
+        }
+    }
+    float noise_est   = noise_sum / (2 * PDM_CFAR_TRAIN_CELLS);
+    float cfar_thresh = noise_est * detect_threshold;
+
+    LOG_DBG("PDM cut (x1e-6): %.2f  noise_est (x1e-6): %.2f",
+            (double)(cut * PDM_SCALING_FACTOR), (double)(noise_est * PDM_SCALING_FACTOR));
+
+    if (pdm_verbose) {
+        LOG_INF("PDM cut (x1e-6): %.2f  thresh (x1e-6): %.2f%s",
+                (double)(cut * PDM_SCALING_FACTOR), (double)(cfar_thresh * PDM_SCALING_FACTOR),
+                cut > cfar_thresh ? "  [ABOVE THRESHOLD]" : "");
+    }
+
+    if (pdm_capture_active && cut > cfar_thresh) {
+        LOG_INF("PDM: ACK detected (cut=%.2f thresh=%.2f)",
+                (double)(cut * PDM_SCALING_FACTOR), (double)(cfar_thresh * PDM_SCALING_FACTOR));
         k_sem_give(&ack_sem);
     }
 }
@@ -349,11 +370,17 @@ void pdm_manager_init(void)
         return;
     }
 
-    /* --- 4. Init work item and semaphore --- */
+    /* --- 4. Precompute Hanning window and init FFT --- */
+    for (int i = 0; i < PDM_BUF_SAMPLES; i++) {
+        hann_window[i] = 0.5f * (1.0f - cosf(2.0f * (float)M_PI * i / (PDM_BUF_SAMPLES - 1)));
+    }
+    arm_rfft_fast_init_f32(&fft_inst, PDM_BUF_SAMPLES);
+
+    /* --- 5. Init work item and semaphore --- */
     k_work_init(&pdm_process_work, pdm_process_work_handler);
     k_sem_init(&ack_sem, 0, 1);
 
-    /* --- 5. Register dynamic Matter endpoint (chip stack must be started) --- */
+    /* --- 6. Register dynamic Matter endpoint (chip stack must be started) --- */
     PlatformMgr().LockChipStack();
 
     CHIP_ERROR chip_err = emberAfSetDynamicEndpoint(
@@ -377,11 +404,11 @@ void pdm_manager_init(void)
 
 void pdm_manager_verbose_start(void)
 {
-    goertzel_verbose = true;
+    pdm_verbose = true;
     if (!pdm_capture_active) {
         nrfx_err_t err = nrfx_pdm_start(&pdm_inst);
         if (err == NRFX_SUCCESS) {
-            goertzel_verbose_pdm_own = true;
+            pdm_verbose_own = true;
         } else {
             LOG_ERR("PDM: verbose start failed: 0x%x", err);
         }
@@ -391,10 +418,10 @@ void pdm_manager_verbose_start(void)
 
 void pdm_manager_verbose_stop(void)
 {
-    goertzel_verbose = false;
-    if (goertzel_verbose_pdm_own) {
+    pdm_verbose = false;
+    if (pdm_verbose_own) {
         nrfx_pdm_stop(&pdm_inst);
-        goertzel_verbose_pdm_own = false;
+        pdm_verbose_own = false;
     }
 }
 
