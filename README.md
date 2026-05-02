@@ -119,7 +119,7 @@ This routes through `emberAfExternalAttributeWriteCallback`, updates your backin
 ## Hardware
 
 - **MCU:** Seeed XIAO nRF52840 (BLE + 802.15.4)
-- **IR LED:** on P0.03 (PWM0, 38 kHz carrier)
+- **IR LED:** on P0.02 (PWM0, 38 kHz carrier)
 - **SCD40 sensor:** on P0.04 (SDA) / P0.05 (SCL), I2C0 at 100 kHz
 - **Debug:** J-Link + RTT (USB disabled to save RAM)
 
@@ -170,14 +170,14 @@ cd matter-ac-ncs
 export PATH="$HOME/ncs/toolchains/7795df4459/opt/bin:$PATH"
 export ZEPHYR_BASE="$HOME/ncs/zephyr"
 
-west build -b xiao_ble/nrf52840
+west build -b xiao_ble/nrf52840/sense
 ```
 
 Use `-p always` for a pristine rebuild (required after devicetree or Kconfig
 changes):
 
 ```bash
-west build -b xiao_ble/nrf52840 -p always
+west build -b xiao_ble/nrf52840/sense -p always
 ```
 
 ## Flash
@@ -274,7 +274,7 @@ src/
   ir_driver.cpp/h            nRF52840 PWM 38kHz carrier
   ir_protocol.cpp/h          Hitachi Shirokuma-kun encoding
   scd40_manager.cpp/h        SCD40 I2C driver, Matter attribute updates
-  pdm_manager.cpp/h          PDM mic, 2kHz Goertzel, dynamic EP4 (Contact Sensor)
+  pdm_manager.cpp/h          PDM mic, 2kHz FFT+CA-CFAR, dynamic EP4 (Contact Sensor)
   chip_project_config.h      CHIP project config (dynamic endpoint count)
   ac_controller.zap          ZAP data model definition
   ac_controller.matter       Generated .matter IDL
