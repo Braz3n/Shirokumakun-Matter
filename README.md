@@ -183,15 +183,40 @@ west build -b xiao_ble/nrf52840 -p always
 ## Flash
 
 ```bash
-west flash --runner jlink
+make flash
 ```
 
-Or directly with J-Link Commander:
+Or erase + flash (use for first-time programming):
 
 ```bash
-JLinkExe -device nRF52840_xxAA -if SWD -speed 4000 -autoconnect 1 \
-  -CommandFile <(echo "loadfile build/matter-ac-ncs/zephyr/zephyr.hex; r; g; exit")
+make flash-erase
 ```
+
+## DFU over USB
+
+Once the device is running, firmware can be updated over USB without a J-Link using
+[mcumgr-client](https://github.com/vouch-opensource/mcumgr-client):
+
+```bash
+make dfu
+```
+
+This uploads `build/matter-ac-ncs/zephyr/zephyr.signed.bin` to the device via SMP over `/dev/ttyACM1`.
+
+### Zephyr CDC ACM bug
+
+The Zephyr CDC ACM driver has a bug where the internal RX buffer is sized to
+`CONFIG_CDC_ACM_BULK_EP_MPS` (64 bytes on full-speed USB) instead of 512, which
+causes SMP transfers to stall. Apply this one-line fix to the NCS Zephyr source before
+building (suggested by the mcumgr-client README):
+
+```
+~/ncs/zephyr/subsys/usb/device/class/cdc_acm.c line 74:
+-  #define CDC_ACM_BUFFER_SIZE (CONFIG_CDC_ACM_BULK_EP_MPS)
++  #define CDC_ACM_BUFFER_SIZE 512
+```
+
+This fix will need to be reapplied after `west update`.
 
 ## RTT Logs
 

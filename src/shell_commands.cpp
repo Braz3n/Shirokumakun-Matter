@@ -12,6 +12,8 @@
 #include <app/server/OnboardingCodesUtil.h>
 #include <platform/CHIPDeviceLayer.h>
 #include "pdm_manager.h"
+#include "ir_driver.h"
+#include "ir_protocol.h"
 
 using namespace chip;
 using namespace chip::DeviceLayer;
@@ -79,7 +81,22 @@ static int cmd_threshold(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
+/* ac off — send power-off IR command immediately */
+static int cmd_off(const struct shell *sh, size_t argc, char **argv)
+{
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+    static struct IrPulse pulses[IR_MAX_PULSES];
+    struct AcState state = { .power = false, .mode = AC_MODE_COOLING,
+                             .temp_c = 24, .fan = FAN_SPEED_AUTO };
+    uint16_t count = ac_encode_pulses(&state, pulses);
+    ir_dispatch_command(pulses, count);
+    shell_print(sh, "AC off command queued");
+    return 0;
+}
+
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_ac,
+    SHELL_CMD_ARG(off,        NULL, "Send power-off IR command",            cmd_off,       1, 0),
     SHELL_CMD_ARG(reset,     NULL, "Clear pairing state (factory reset)", cmd_reset,     1, 0),
     SHELL_CMD_ARG(qr,        NULL, "Print QR code and manual pairing code", cmd_qr,      1, 0),
     SHELL_CMD_ARG(goertzel,  NULL, "Stream Goertzel power on|off",        cmd_goertzel,  2, 0),
@@ -91,6 +108,7 @@ static int cmd_ac(const struct shell *sh, size_t argc, char **argv)
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
     shell_print(sh, "Subcommands:");
+    shell_print(sh, "  off        Send power-off IR command");
     shell_print(sh, "  reset      Clear pairing state (factory reset)");
     shell_print(sh, "  qr         Print QR code and manual pairing code");
     shell_print(sh, "  goertzel   Stream Goertzel 2kHz power  on|off");

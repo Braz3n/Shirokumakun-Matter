@@ -13,6 +13,7 @@
  */
 
 #include "ir_driver.h"
+#include "ir_protocol.h"
 #include "pdm_manager.h"
 
 #include <zephyr/kernel.h>
@@ -44,6 +45,40 @@ static const uint16_t ir_countertop = 421U; /* 16 000 000 / 38 000 ≈ 421 → 3
 
 static nrf_pwm_values_common_t duty_value;
 static nrf_pwm_sequence_t seq;
+
+/* --- Dispatch thread: non-blocking enqueue from Matter thread --- */
+static K_SEM_DEFINE(ir_dispatch_sem, 0, 1);
+static K_MUTEX_DEFINE(ir_dispatch_mutex);
+static struct IrPulse ir_pending_buf[IR_MAX_PULSES];
+static struct IrPulse ir_active_buf[IR_MAX_PULSES];
+static uint16_t ir_pending_count;
+static uint16_t ir_active_count;
+
+static void ir_dispatch_thread_fn(void *, void *, void *)
+{
+	while (true) {
+		k_sem_take(&ir_dispatch_sem, K_FOREVER);
+		k_mutex_lock(&ir_dispatch_mutex, K_FOREVER);
+		ir_active_count = ir_pending_count;
+		memcpy(ir_active_buf, ir_pending_buf,
+		       ir_pending_count * sizeof(struct IrPulse));
+		k_mutex_unlock(&ir_dispatch_mutex);
+		ir_send_command(ir_active_buf, ir_active_count);
+	}
+}
+
+K_THREAD_DEFINE(ir_dispatch_thread, 1024,
+		ir_dispatch_thread_fn, NULL, NULL, NULL,
+		K_PRIO_PREEMPT(10), 0, 0);
+
+void ir_dispatch_command(const struct IrPulse *pulses, uint16_t count)
+{
+	k_mutex_lock(&ir_dispatch_mutex, K_FOREVER);
+	ir_pending_count = count;
+	memcpy(ir_pending_buf, pulses, count * sizeof(struct IrPulse));
+	k_mutex_unlock(&ir_dispatch_mutex);
+	k_sem_give(&ir_dispatch_sem);
+}
 
 int ir_driver_init(void)
 {
