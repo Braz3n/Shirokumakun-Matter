@@ -51,27 +51,27 @@ LOG_MODULE_REGISTER(pdm_mgr, LOG_LEVEL_INF);
  * Hardware constants
  * -------------------------------------------------------------------------- */
 
-#define PDM_CLK_PIN   NRF_GPIO_PIN_MAP(1, 0)   /* P1.00 */
-#define PDM_DIN_PIN   NRF_GPIO_PIN_MAP(0, 16)  /* P0.16 */
-#define MIC_EN_PORT   1
-#define MIC_EN_PIN    10                        /* P1.10 active HIGH */
+#define PDM_CLK_PIN NRF_GPIO_PIN_MAP(1, 0)  /* P1.00 */
+#define PDM_DIN_PIN NRF_GPIO_PIN_MAP(0, 16) /* P0.16 */
+#define MIC_EN_PORT 1
+#define MIC_EN_PIN  10 /* P1.10 active HIGH */
 
 /* --------------------------------------------------------------------------
  * Detection constants
  * -------------------------------------------------------------------------- */
 
-#define PDM_BUF_SAMPLES        1024
-#define PDM_TARGET_BIN         127   /* round(2000 * 1024 / 16125) — 2000 Hz */
-#define PDM_CFAR_GUARD_CELLS     2   /* bins each side excluded from noise estimate */
-#define PDM_CFAR_TRAIN_CELLS    10   /* bins each side used for noise estimate */
-#define PDM_SCALING_FACTOR     1e-6f   /* scale applied before logging */
-static float detect_threshold = 25.0f;  /* CFAR multiplier: N× above noise estimate */
+#define PDM_BUF_SAMPLES      1024
+#define PDM_TARGET_BIN       127       /* round(2000 * 1024 / 16125) — 2000 Hz */
+#define PDM_CFAR_GUARD_CELLS 2         /* bins each side excluded from noise estimate */
+#define PDM_CFAR_TRAIN_CELLS 10        /* bins each side used for noise estimate */
+#define PDM_SCALING_FACTOR   1e-6f     /* scale applied before logging */
+static float detect_threshold = 25.0f; /* CFAR multiplier: N× above noise estimate */
 
 /* --------------------------------------------------------------------------
  * State
  * -------------------------------------------------------------------------- */
 
-static int16_t pdm_buf[2][PDM_BUF_SAMPLES];
+static int16_t          pdm_buf[2][PDM_BUF_SAMPLES];
 static volatile uint8_t buf_ready_idx;
 static volatile bool    buf_available;
 
@@ -82,9 +82,9 @@ static volatile bool pdm_verbose     = false;
 static volatile bool pdm_verbose_own = false;
 
 static arm_rfft_fast_instance_f32 fft_inst;
-static float fft_in[PDM_BUF_SAMPLES];
-static float fft_out[PDM_BUF_SAMPLES];
-static float hann_window[PDM_BUF_SAMPLES];
+static float                      fft_in[PDM_BUF_SAMPLES];
+static float                      fft_out[PDM_BUF_SAMPLES];
+static float                      hann_window[PDM_BUF_SAMPLES];
 
 /* Backing store for BooleanState::StateValue on EP4.
  * Written via emberAfExternalAttributeWriteCallback from Set(4, ...) in ir_driver.cpp. */
@@ -103,40 +103,41 @@ using namespace chip::app::Clusters;
 using namespace chip::DeviceLayer;
 
 /* Contact Sensor device type 0x0015, revision 1 */
-static const EmberAfDeviceType kContactSensorDeviceType[] = {{ 0x0015, 1 }};
-static DataVersion gAlarmDataVersions[3]; /* one per cluster: Descriptor + Identify + BooleanState */
+static const EmberAfDeviceType kContactSensorDeviceType[] = {{0x0015, 1}};
+static DataVersion
+    gAlarmDataVersions[3]; /* one per cluster: Descriptor + Identify + BooleanState */
 
 /* All cluster-specific attributes are EXTERNAL_STORAGE — no dynamic RAM backing.
  * DECLARE_DYNAMIC_ATTRIBUTE_LIST_END() appends ClusterRevision + FeatureMap,
  * also as EXTERNAL_STORAGE, automatically. */
 
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(descriptorAttrs)
-    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::DeviceTypeList::Id, ARRAY, 254, 0),
-    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ServerList::Id,     ARRAY, 254, 0),
-    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ClientList::Id,     ARRAY, 254, 0),
-    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::PartsList::Id,      ARRAY, 254, 0),
-DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::DeviceTypeList::Id, ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ServerList::Id, ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ClientList::Id, ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::PartsList::Id, ARRAY, 254, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
 
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(identifyAttrs)
-    DECLARE_DYNAMIC_ATTRIBUTE(Identify::Attributes::IdentifyTime::Id, INT16U, 2,
-                              ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE) | ZAP_ATTRIBUTE_MASK(WRITABLE)),
+DECLARE_DYNAMIC_ATTRIBUTE(Identify::Attributes::IdentifyTime::Id, INT16U, 2,
+                          ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE) | ZAP_ATTRIBUTE_MASK(WRITABLE)),
     DECLARE_DYNAMIC_ATTRIBUTE(Identify::Attributes::IdentifyType::Id, ENUM8, 1,
                               ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE)),
-DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+    DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
 
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(boolStateAttrs)
-    DECLARE_DYNAMIC_ATTRIBUTE(BooleanState::Attributes::StateValue::Id, BOOLEAN, 1,
-                              ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE)),
-DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
+DECLARE_DYNAMIC_ATTRIBUTE(BooleanState::Attributes::StateValue::Id, BOOLEAN, 1,
+                          ZAP_ATTRIBUTE_MASK(EXTERNAL_STORAGE)),
+    DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
 
 DECLARE_DYNAMIC_CLUSTER_LIST_BEGIN(alarmClusters)
-    DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs,
-                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
-    DECLARE_DYNAMIC_CLUSTER(Identify::Id, identifyAttrs,
-                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
-    DECLARE_DYNAMIC_CLUSTER(BooleanState::Id, boolStateAttrs,
-                            ZAP_CLUSTER_MASK(SERVER), nullptr, nullptr),
-DECLARE_DYNAMIC_CLUSTER_LIST_END;
+DECLARE_DYNAMIC_CLUSTER(Descriptor::Id, descriptorAttrs, ZAP_CLUSTER_MASK(SERVER), nullptr,
+                        nullptr),
+    DECLARE_DYNAMIC_CLUSTER(Identify::Id, identifyAttrs, ZAP_CLUSTER_MASK(SERVER), nullptr,
+                            nullptr),
+    DECLARE_DYNAMIC_CLUSTER(BooleanState::Id, boolStateAttrs, ZAP_CLUSTER_MASK(SERVER), nullptr,
+                            nullptr),
+    DECLARE_DYNAMIC_CLUSTER_LIST_END;
 
 DECLARE_DYNAMIC_ENDPOINT(alarmEndpoint, alarmClusters);
 
@@ -148,12 +149,9 @@ DECLARE_DYNAMIC_ENDPOINT(alarmEndpoint, alarmClusters);
 using chip::Protocols::InteractionModel::Status;
 
 chip::Protocols::InteractionModel::Status
-emberAfExternalAttributeReadCallback(chip::EndpointId endpoint,
-                                     chip::ClusterId clusterId,
+emberAfExternalAttributeReadCallback(chip::EndpointId endpoint, chip::ClusterId clusterId,
                                      const EmberAfAttributeMetadata *attributeMetadata,
-                                     uint8_t *buffer,
-                                     uint16_t maxReadLength)
-{
+                                     uint8_t *buffer, uint16_t maxReadLength) {
     if (endpoint != 4) {
         return Status::Failure;
     }
@@ -187,8 +185,7 @@ emberAfExternalAttributeReadCallback(chip::EndpointId endpoint,
     }
 
     /* BooleanState cluster */
-    if (clusterId == BooleanState::Id &&
-        attrId == BooleanState::Attributes::StateValue::Id) {
+    if (clusterId == BooleanState::Id && attrId == BooleanState::Attributes::StateValue::Id) {
         *buffer = ep4_state_value ? 1 : 0;
         return Status::Success;
     }
@@ -197,11 +194,9 @@ emberAfExternalAttributeReadCallback(chip::EndpointId endpoint,
 }
 
 chip::Protocols::InteractionModel::Status
-emberAfExternalAttributeWriteCallback(chip::EndpointId endpoint,
-                                      chip::ClusterId clusterId,
+emberAfExternalAttributeWriteCallback(chip::EndpointId endpoint, chip::ClusterId clusterId,
                                       const EmberAfAttributeMetadata *attributeMetadata,
-                                      uint8_t *buffer)
-{
+                                      uint8_t                        *buffer) {
     if (endpoint != 4) {
         return Status::Failure;
     }
@@ -209,15 +204,14 @@ emberAfExternalAttributeWriteCallback(chip::EndpointId endpoint,
     chip::AttributeId attrId = attributeMetadata->attributeId;
 
     /* Accept IdentifyTime writes silently (no-op identify) */
-    if (clusterId == Identify::Id &&
-        attrId == Identify::Attributes::IdentifyTime::Id) {
+    if (clusterId == Identify::Id && attrId == Identify::Attributes::IdentifyTime::Id) {
         return Status::Success;
     }
 
     /* StateValue written by ir_driver.cpp via BooleanState::Attributes::StateValue::Set(4, v).
-     * After this callback returns SUCCESS, the stack automatically triggers subscription reports. */
-    if (clusterId == BooleanState::Id &&
-        attrId == BooleanState::Attributes::StateValue::Id) {
+     * After this callback returns SUCCESS, the stack automatically triggers subscription reports.
+     */
+    if (clusterId == BooleanState::Id && attrId == BooleanState::Attributes::StateValue::Id) {
         ep4_state_value = (*buffer != 0);
         return Status::Success;
     }
@@ -229,8 +223,7 @@ emberAfExternalAttributeWriteCallback(chip::EndpointId endpoint,
  * Work handler — FFT + CA-CFAR, runs in system workqueue
  * -------------------------------------------------------------------------- */
 
-static void pdm_process_work_handler(struct k_work *work)
-{
+static void pdm_process_work_handler(struct k_work *work) {
     ARG_UNUSED(work);
 
     if (!buf_available) {
@@ -238,8 +231,8 @@ static void pdm_process_work_handler(struct k_work *work)
     }
 
     unsigned int key = irq_lock();
-    uint8_t idx = buf_ready_idx;
-    buf_available = false;
+    uint8_t      idx = buf_ready_idx;
+    buf_available    = false;
     irq_unlock(key);
 
     /* Apply Hanning window and convert to float */
@@ -267,18 +260,18 @@ static void pdm_process_work_handler(struct k_work *work)
     float noise_est   = noise_sum / (2 * PDM_CFAR_TRAIN_CELLS);
     float cfar_thresh = noise_est * detect_threshold;
 
-    LOG_DBG("PDM cut (x1e-6): %.2f  noise_est (x1e-6): %.2f",
-            (double)(cut * PDM_SCALING_FACTOR), (double)(noise_est * PDM_SCALING_FACTOR));
+    LOG_DBG("PDM cut (x1e-6): %.2f  noise_est (x1e-6): %.2f", (double)(cut * PDM_SCALING_FACTOR),
+            (double)(noise_est * PDM_SCALING_FACTOR));
 
     if (pdm_verbose) {
-        LOG_INF("PDM cut (x1e-6): %.2f  thresh (x1e-6): %.2f%s",
-                (double)(cut * PDM_SCALING_FACTOR), (double)(cfar_thresh * PDM_SCALING_FACTOR),
+        LOG_INF("PDM cut (x1e-6): %.2f  thresh (x1e-6): %.2f%s", (double)(cut * PDM_SCALING_FACTOR),
+                (double)(cfar_thresh * PDM_SCALING_FACTOR),
                 cut > cfar_thresh ? "  [ABOVE THRESHOLD]" : "");
     }
 
     if (pdm_capture_active && cut > cfar_thresh) {
-        LOG_INF("PDM: ACK detected (cut=%.2f thresh=%.2f)",
-                (double)(cut * PDM_SCALING_FACTOR), (double)(cfar_thresh * PDM_SCALING_FACTOR));
+        LOG_INF("PDM: ACK detected (cut=%.2f thresh=%.2f)", (double)(cut * PDM_SCALING_FACTOR),
+                (double)(cfar_thresh * PDM_SCALING_FACTOR));
         k_sem_give(&ack_sem);
     }
 }
@@ -287,8 +280,7 @@ static void pdm_process_work_handler(struct k_work *work)
  * nrfx_pdm ISR callback — ISR context, keep minimal
  * -------------------------------------------------------------------------- */
 
-static void pdm_event_handler(const nrfx_pdm_evt_t *evt)
-{
+static void pdm_event_handler(const nrfx_pdm_evt_t *evt) {
     static uint8_t next = 0;
 
     if (evt->buffer_requested) {
@@ -307,10 +299,9 @@ static void pdm_event_handler(const nrfx_pdm_evt_t *evt)
  * Public API
  * -------------------------------------------------------------------------- */
 
-void pdm_manager_start_listen(void)
-{
+void pdm_manager_start_listen(void) {
     k_sem_reset(&ack_sem);
-    buf_available = false;
+    buf_available      = false;
     pdm_capture_active = true;
 
     nrfx_err_t err = nrfx_pdm_start(&pdm_inst);
@@ -320,8 +311,7 @@ void pdm_manager_start_listen(void)
     }
 }
 
-bool pdm_manager_collect_ack(uint32_t timeout_ms)
-{
+bool pdm_manager_collect_ack(uint32_t timeout_ms) {
     int rc = k_sem_take(&ack_sem, K_MSEC(timeout_ms));
 
     pdm_capture_active = false;
@@ -334,8 +324,7 @@ bool pdm_manager_collect_ack(uint32_t timeout_ms)
     return (rc == 0);
 }
 
-void pdm_manager_init(void)
-{
+void pdm_manager_init(void) {
     /* --- 1. Enable microphone via P1.10 HIGH --- */
     const struct device *gpio1 = DEVICE_DT_GET(DT_NODELABEL(gpio1));
 
@@ -361,8 +350,8 @@ void pdm_manager_init(void)
 
     /* --- 3. Init nrfx_pdm --- */
     nrfx_pdm_config_t cfg = NRFX_PDM_DEFAULT_CONFIG(PDM_CLK_PIN, PDM_DIN_PIN);
-    cfg.gain_l = NRF_PDM_GAIN_MAXIMUM;
-    cfg.gain_r = NRF_PDM_GAIN_MAXIMUM;
+    cfg.gain_l            = NRF_PDM_GAIN_MAXIMUM;
+    cfg.gain_r            = NRF_PDM_GAIN_MAXIMUM;
 
     nrfx_err_t err = nrfx_pdm_init(&pdm_inst, &cfg, pdm_event_handler);
     if (err != NRFX_SUCCESS) {
@@ -383,12 +372,11 @@ void pdm_manager_init(void)
     /* --- 6. Register dynamic Matter endpoint (chip stack must be started) --- */
     PlatformMgr().LockChipStack();
 
-    CHIP_ERROR chip_err = emberAfSetDynamicEndpoint(
-        0,            /* dynamic endpoint slot index */
-        4,            /* endpoint id */
-        &alarmEndpoint,
-        Span<DataVersion>(gAlarmDataVersions),
-        Span<const EmberAfDeviceType>(kContactSensorDeviceType));
+    CHIP_ERROR chip_err =
+        emberAfSetDynamicEndpoint(0, /* dynamic endpoint slot index */
+                                  4, /* endpoint id */
+                                  &alarmEndpoint, Span<DataVersion>(gAlarmDataVersions),
+                                  Span<const EmberAfDeviceType>(kContactSensorDeviceType));
 
     PlatformMgr().UnlockChipStack();
 
@@ -402,8 +390,7 @@ void pdm_manager_init(void)
     LOG_INF("PDM: Initialized — capture starts on demand");
 }
 
-void pdm_manager_verbose_start(void)
-{
+void pdm_manager_verbose_start(void) {
     pdm_verbose = true;
     if (!pdm_capture_active) {
         nrfx_err_t err = nrfx_pdm_start(&pdm_inst);
@@ -416,8 +403,7 @@ void pdm_manager_verbose_start(void)
     /* if pdm_capture_active, PDM is already running — verbose piggybacks */
 }
 
-void pdm_manager_verbose_stop(void)
-{
+void pdm_manager_verbose_stop(void) {
     pdm_verbose = false;
     if (pdm_verbose_own) {
         nrfx_pdm_stop(&pdm_inst);
@@ -425,5 +411,9 @@ void pdm_manager_verbose_stop(void)
     }
 }
 
-void  pdm_manager_set_threshold(float t) { detect_threshold = t; }
-float pdm_manager_get_threshold(void)    { return detect_threshold; }
+void pdm_manager_set_threshold(float t) {
+    detect_threshold = t;
+}
+float pdm_manager_get_threshold(void) {
+    return detect_threshold;
+}

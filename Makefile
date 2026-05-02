@@ -12,7 +12,9 @@ export ZEPHYR_BASE := /home/zane/ncs/zephyr
 BOARD := xiao_ble/nrf52840/sense
 BUILD_DIR := build
 
-.PHONY: build pristine flash flash-erase attach
+SRCS := $(wildcard src/*.cpp src/*.c)
+
+.PHONY: build pristine flash flash-erase attach format
 
 build:
 	$(WEST) build -b $(BOARD) .
@@ -33,6 +35,9 @@ flash-erase: build
 
 attach:
 	$(WEST) attach
+
+format:
+	clang-format -i $(SRCS)
 
 # DFU over USB-CDC ACM1 using mcumgr-client: https://github.com/vouch-opensource/mcumgr-client
 DFU_PORT := $(shell for d in /dev/ttyACM*; do \
