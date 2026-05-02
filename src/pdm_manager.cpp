@@ -55,7 +55,8 @@ LOG_MODULE_REGISTER(pdm_mgr, LOG_LEVEL_INF);
 
 #define PDM_BUF_SAMPLES   1024
 #define GOERTZEL_COEFF    1.42288f      /* 2*cos(2*pi*2000/16125) exact 2kHz, N-independent */
-static float detect_threshold = 0.1f;  /* normalized power — tune empirically */
+#define GOERTZEL_SCALE_FACTOR 1e6f         /* scale applied before logging and threshold comparison */
+static float detect_threshold = 0.1f;  /* threshold in GOERTZEL_SCALE_FACTOR units */
 
 /* --------------------------------------------------------------------------
  * State
@@ -248,14 +249,14 @@ static void pdm_process_work_handler(struct k_work *work)
     irq_unlock(key);
 
     float norm = goertzel_power(pdm_buf[idx], PDM_BUF_SAMPLES);
-    LOG_DBG("Goertzel (x1e6): %.4f", (double)(norm * 1e6f));
+    LOG_DBG("Goertzel (x1e6): %.4f", (double)(norm * GOERTZEL_SCALE_FACTOR));
 
     if (goertzel_verbose) {
-        LOG_INF("PDM power x1e6: %.1f%s", (double)(norm * 1e6f),
-                norm > detect_threshold ? "  [ABOVE THRESHOLD]" : "");
+        LOG_INF("PDM power x1e6: %.1f%s", (double)(norm * GOERTZEL_SCALE_FACTOR),
+                norm * GOERTZEL_SCALE_FACTOR > detect_threshold ? "  [ABOVE THRESHOLD]" : "");
     }
 
-    if (pdm_capture_active && norm > detect_threshold) {
+    if (pdm_capture_active && norm * GOERTZEL_SCALE_FACTOR > detect_threshold) {
         LOG_INF("PDM: ACK detected");
         k_sem_give(&ack_sem);
     }
