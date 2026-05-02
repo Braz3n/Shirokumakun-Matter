@@ -10,7 +10,7 @@ export ZEPHYR_SDK_INSTALL_DIR := $(TC)/opt/zephyr-sdk
 export ZEPHYR_BASE := /home/zane/ncs/zephyr
 
 BOARD := xiao_ble/nrf52840/sense
-BUILD_DIR := build/matter-ac-ncs
+BUILD_DIR := build
 
 .PHONY: build pristine flash flash-erase attach
 

@@ -2,7 +2,7 @@
  * Devicetree overlay for Seeed XIAO BLE Sense — Matter AC Controller
  *
  * Extends the base XIAO BLE settings with PDM microphone enablement.
- * All other settings (I2C remap, USB disable, PWM0 disable, flash reclaim)
+ * All other settings (I2C remap, USB-CDC dual-port, PWM0 disable)
  * are identical to xiao_ble_nrf52840.overlay.
  *
  * PDM pinctrl (pdm0_default / pdm0_sleep) is already defined in:
@@ -38,32 +38,33 @@
 
 };
 
-/* Enable USB-CDC for shell console */
-&usbd { status = "okay"; };
-
-/* Disable Zephyr PWM0 — the IR driver configures NRF_PWM0 registers
- * directly to work around the polarity trick needed for 0% duty. */
-&pwm0 { status = "disabled"; };
-
-/* Reclaim SoftDevice + bootloader flash for application code.
- * Default layout:  code 0x27000-0xEC000 (804KB), storage 0xEC000-0xF4000 (32KB)
- * New layout:      code 0x00000-0xF0000 (960KB), storage 0xF0000-0x100000 (64KB)
- *
- * Delete the old partitions node first, then redefine.
- */
-&flash0 {
-    /delete-node/ partitions;
+/* USB-CDC: shell on ACM0 (usb_cdc_acm_uart, via board DTS), SMP/DFU on ACM1 */
+&usbd {
+    status = "okay";
+    cdc_acm_uart1: cdc_acm_uart1 {
+        compatible = "zephyr,cdc-acm-uart";
+    };
 };
 
+/* Replace Adafruit-layout partitions with MCUboot-compatible labels.
+ * Addresses must match pm_static_xiao_ble_nrf52840_sense.yml.
+ * image_signing.cmake needs slot0_partition to determine the slot size. */
 &flash0 {
+    /delete-node/ partitions;
+
     partitions {
         compatible = "fixed-partitions";
         #address-cells = <1>;
         #size-cells = <1>;
 
-        code_partition: partition@0 {
-            label = "code_partition";
-            reg = <0x00000000 0x000F0000>;
+        boot_partition: partition@0 {
+            label = "mcuboot";
+            reg = <0x00000000 0x00010000>;
+        };
+
+        slot0_partition: partition@10000 {
+            label = "image-0";
+            reg = <0x00010000 0x000E0000>;
         };
 
         storage_partition: partition@f0000 {
@@ -72,6 +73,19 @@
         };
     };
 };
+
+/ {
+    chosen {
+        zephyr,code-partition = &slot0_partition;
+        zephyr,uart-mcumgr = &cdc_acm_uart1;
+        nordic,pm-ext-flash = &p25q16h;
+    };
+};
+
+
+/* Disable Zephyr PWM0 — the IR driver configures NRF_PWM0 registers
+ * directly to work around the polarity trick needed for 0% duty. */
+&pwm0 { status = "disabled"; };
 
 /* Enable PDM0 — pinctrl already defined in xiao_ble-pinctrl.dtsi.
  * The Sense board DTS sets clock-source and pinctrl; we only add status. */
