@@ -165,8 +165,8 @@ static void update_ep4_state(bool failed)
 bool ir_send_command(const struct IrPulse *pulses, uint16_t count)
 {
 	for (int attempt = 1; attempt <= IR_RETRY_COUNT; attempt++) {
-		pdm_manager_start_listen();
 		ir_transmit(pulses, count);
+		pdm_manager_start_listen();
 		if (pdm_manager_collect_ack(IR_ACK_TIMEOUT_MS)) {
 			LOG_INF("IR: ACK received on attempt %d/%d", attempt, IR_RETRY_COUNT);
 			update_ep4_state(false);
