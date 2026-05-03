@@ -26,3 +26,5 @@ void  pdm_manager_verbose_start(void);
 void  pdm_manager_verbose_stop(void);
 void  pdm_manager_set_threshold(float t);
 float pdm_manager_get_threshold(void);
+
+void pdm_manager_set_ep4_state(bool v);

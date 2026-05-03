@@ -15,11 +15,15 @@
 #include "app/task_executor.h"
 
 #include <app/clusters/identify-server/identify-server.h>
-#include <app/server/OnboardingCodesUtil.h>
+#include <setup_payload/OnboardingCodesUtil.h>
 
 #include <zephyr/logging/log.h>
 
 extern void zcl_callbacks_ready(void);
+
+/* nrf_matter_cluster_init_run_all is called by matter_init.cpp::StartServer() in NCS v3.3.0.
+ * We don't register any entries via NRF_MATTER_CLUSTER_INIT so this is a no-op. */
+extern "C" bool nrf_matter_cluster_init_run_all(void) { return true; }
 
 LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
 

@@ -9,7 +9,7 @@
 
 #include <zephyr/shell/shell.h>
 #include <app/server/Server.h>
-#include <app/server/OnboardingCodesUtil.h>
+#include <setup_payload/OnboardingCodesUtil.h>
 #include <platform/CHIPDeviceLayer.h>
 #include "pdm_manager.h"
 #include "ir_driver.h"

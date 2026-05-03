@@ -33,6 +33,7 @@
 #include <cstring>
 
 #include <nrfx_pdm.h>
+#include <drivers/nrfx_errors.h>
 #include <hal/nrf_gpio.h>
 #include <arm_math.h>
 #include <math.h>
@@ -42,6 +43,7 @@
 #endif
 
 #include <app/util/attribute-storage.h>
+#include <app/reporting/reporting.h>
 #include <platform/CHIPDeviceLayer.h>
 #include <protocols/interaction_model/StatusCode.h>
 
@@ -91,7 +93,7 @@ static float                      hann_window[PDM_BUF_SAMPLES];
 static bool ep4_state_value = false;
 
 /* nrfx_pdm instance (nrfx >= 3.7.0 multi-instance API) */
-static const nrfx_pdm_t pdm_inst = NRFX_PDM_INSTANCE(0);
+static nrfx_pdm_t pdm_inst = NRFX_PDM_INSTANCE(0);
 
 /* --------------------------------------------------------------------------
  * Matter dynamic endpoint descriptors
@@ -304,7 +306,7 @@ void pdm_manager_start_listen(void) {
     buf_available      = false;
     pdm_capture_active = true;
 
-    nrfx_err_t err = nrfx_pdm_start(&pdm_inst);
+    int err = nrfx_pdm_start(&pdm_inst);
     if (err != NRFX_SUCCESS) {
         LOG_ERR("PDM: nrfx_pdm_start failed: 0x%x", err);
         pdm_capture_active = false;
@@ -316,7 +318,7 @@ bool pdm_manager_collect_ack(uint32_t timeout_ms) {
 
     pdm_capture_active = false;
 
-    nrfx_err_t err = nrfx_pdm_stop(&pdm_inst);
+    int err = nrfx_pdm_stop(&pdm_inst);
     if (err != NRFX_SUCCESS && err != NRFX_ERROR_INVALID_STATE) {
         LOG_WRN("PDM: nrfx_pdm_stop unexpected error: 0x%x", err);
     }
@@ -345,7 +347,7 @@ void pdm_manager_init(void) {
     /* --- 2. Wire nrfx_pdm IRQ ---
      * Use IRQ_PRIO_LOWEST: Zephyr's nrfx glue ignores nrfx interrupt_priority
      * (NRFX_IRQ_PRIORITY_SET is a no-op); the only place priority is set is here. */
-    IRQ_CONNECT(PDM_IRQn, IRQ_PRIO_LOWEST, nrfx_isr, nrfx_pdm_0_irq_handler, 0);
+    IRQ_CONNECT(PDM_IRQn, IRQ_PRIO_LOWEST, nrfx_isr, nrfx_pdm_irq_handler, 0);
     irq_enable(PDM_IRQn);
 
     /* --- 3. Init nrfx_pdm --- */
@@ -353,7 +355,7 @@ void pdm_manager_init(void) {
     cfg.gain_l            = NRF_PDM_GAIN_MAXIMUM;
     cfg.gain_r            = NRF_PDM_GAIN_MAXIMUM;
 
-    nrfx_err_t err = nrfx_pdm_init(&pdm_inst, &cfg, pdm_event_handler);
+    int err = nrfx_pdm_init(&pdm_inst, &cfg, pdm_event_handler);
     if (err != NRFX_SUCCESS) {
         LOG_ERR("PDM: nrfx_pdm_init failed: 0x%x", err);
         return;
@@ -393,7 +395,7 @@ void pdm_manager_init(void) {
 void pdm_manager_verbose_start(void) {
     pdm_verbose = true;
     if (!pdm_capture_active) {
-        nrfx_err_t err = nrfx_pdm_start(&pdm_inst);
+        int err = nrfx_pdm_start(&pdm_inst);
         if (err == NRFX_SUCCESS) {
             pdm_verbose_own = true;
         } else {
@@ -416,4 +418,12 @@ void pdm_manager_set_threshold(float t) {
 }
 float pdm_manager_get_threshold(void) {
     return detect_threshold;
+}
+
+void pdm_manager_set_ep4_state(bool v) {
+    PlatformMgr().LockChipStack();
+    ep4_state_value = v;
+    MatterReportingAttributeChangeCallback(4, BooleanState::Id,
+                                           BooleanState::Attributes::StateValue::Id);
+    PlatformMgr().UnlockChipStack();
 }

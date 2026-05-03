@@ -151,9 +151,7 @@ void ir_transmit(const struct IrPulse *pulses, uint16_t count) {
 }
 
 static void update_ep4_state(bool failed) {
-    PlatformMgr().LockChipStack();
-    BooleanState::Attributes::StateValue::Set(4, failed);
-    PlatformMgr().UnlockChipStack();
+    pdm_manager_set_ep4_state(failed);
 }
 
 bool ir_send_command(const struct IrPulse *pulses, uint16_t count) {

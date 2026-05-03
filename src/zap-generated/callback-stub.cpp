@@ -19,6 +19,7 @@
 
 #include <app-common/zap-generated/callback.h>
 #include <app-common/zap-generated/ids/Clusters.h>
+#include <app/ConcreteAttributePath.h>
 #include <lib/support/Span.h>
 #include <protocols/interaction_model/Constants.h>
 
@@ -176,6 +177,18 @@ void __attribute__((weak)) emberAfIdentifyClusterInitCallback(EndpointId endpoin
 {
     // To prevent warning
     (void) endpoint;
+}
+
+/* Called by chipFuncArrayIdentifyServer registered in endpoint_config.h.
+ * Real Identify logic is handled by the Identify object in app_task.cpp. */
+void emberAfIdentifyClusterServerInitCallback(EndpointId endpoint)
+{
+    (void) endpoint;
+}
+
+void MatterIdentifyClusterServerAttributeChangedCallback(const chip::app::ConcreteAttributePath & attributePath)
+{
+    (void) attributePath;
 }
 void __attribute__((weak)) emberAfNetworkCommissioningClusterInitCallback(EndpointId endpoint)
 {
