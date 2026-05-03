@@ -27,11 +27,10 @@ static struct AcState last_sent;
 static bool           last_sent_valid;
 static bool           ir_ready;
 
-/* Map Matter SystemMode to Hitachi AC mode. */
+/* Map Matter SystemMode to Hitachi AC mode. SystemMode 0 (Off) is no longer
+ * used for power — power is driven by the On/Off cluster. */
 static AcMode system_mode_to_ac_mode(uint8_t system_mode) {
     switch (system_mode) {
-    case 0:
-        return AC_MODE_OFF; /* Off */
     case 3:
         return AC_MODE_COOLING; /* Cool */
     case 4:
@@ -67,7 +66,10 @@ void zcl_callbacks_ready(void) {
 
     /* Snapshot current attribute values so deferred callbacks from
      * Matter stack init don't trigger an IR transmission on boot. */
-    Thermostat::SystemModeEnum system_mode_enum = Thermostat::SystemModeEnum::kOff;
+    bool on_off = false;
+    OnOff::Attributes::OnOff::Get(1, &on_off);
+
+    Thermostat::SystemModeEnum system_mode_enum = Thermostat::SystemModeEnum::kCool;
     SystemMode::Get(1, &system_mode_enum);
     uint8_t system_mode = static_cast<uint8_t>(system_mode_enum);
 
@@ -81,7 +83,7 @@ void zcl_callbacks_ready(void) {
     FanControl::FanModeEnum fan_mode_enum = FanControl::FanModeEnum::kAuto;
     FanMode::Get(1, &fan_mode_enum);
 
-    last_sent.power  = (system_mode != 0);
+    last_sent.power  = on_off;
     last_sent.mode   = system_mode_to_ac_mode(system_mode);
     last_sent.temp_c = (uint8_t)(setpoint / 100);
     last_sent.fan    = fan_mode_to_speed(static_cast<uint8_t>(fan_mode_enum));
@@ -103,8 +105,12 @@ static void send_ir_if_changed(void) {
     using namespace Thermostat::Attributes;
     using namespace FanControl::Attributes;
 
-    /* Read current SystemMode */
-    Thermostat::SystemModeEnum system_mode_enum = Thermostat::SystemModeEnum::kOff;
+    /* Read power state from On/Off cluster */
+    bool on_off = false;
+    OnOff::Attributes::OnOff::Get(1, &on_off);
+
+    /* Read current SystemMode (Cool/Heat/FanOnly — not Off) */
+    Thermostat::SystemModeEnum system_mode_enum = Thermostat::SystemModeEnum::kCool;
     SystemMode::Get(1, &system_mode_enum);
     uint8_t system_mode = static_cast<uint8_t>(system_mode_enum);
 
@@ -123,7 +129,7 @@ static void send_ir_if_changed(void) {
 
     /* Build AC state */
     struct AcState state;
-    state.power  = (system_mode != 0);
+    state.power  = on_off;
     state.mode   = system_mode_to_ac_mode(system_mode);
     state.temp_c = (uint8_t)(setpoint / 100);
     state.fan    = fan_mode_to_speed(fan_mode);
@@ -161,7 +167,10 @@ void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &a
         return;
     }
 
-    if (clusterId == Thermostat::Id) {
+    if (clusterId == OnOff::Id) {
+        ChipLogProgress(Zcl, "OnOff attr 0x%04x changed", attributeId);
+        send_ir_if_changed();
+    } else if (clusterId == Thermostat::Id) {
         ChipLogProgress(Zcl, "Thermostat attr 0x%04x changed", attributeId);
         send_ir_if_changed();
     } else if (clusterId == FanControl::Id) {
