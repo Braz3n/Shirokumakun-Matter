@@ -365,7 +365,7 @@ void pdm_manager_init(void) {
     for (int i = 0; i < PDM_BUF_SAMPLES; i++) {
         hann_window[i] = 0.5f * (1.0f - cosf(2.0f * (float)M_PI * i / (PDM_BUF_SAMPLES - 1)));
     }
-    arm_rfft_fast_init_f32(&fft_inst, PDM_BUF_SAMPLES);
+    arm_rfft_fast_init_1024_f32(&fft_inst);
 
     /* --- 5. Init work item and semaphore --- */
     k_work_init(&pdm_process_work, pdm_process_work_handler);
