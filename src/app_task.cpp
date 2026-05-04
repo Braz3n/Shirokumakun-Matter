@@ -52,9 +52,6 @@ CHIP_ERROR AppTask::Init() {
     ReturnErrorOnFailure(Nrf::Matter::PrepareServer());
     ReturnErrorOnFailure(Nrf::Matter::StartServer());
 
-    /* Print QR code and manual pairing code to RTT log. */
-    PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
-
     /* Initialize IR driver (PWM-based 38kHz carrier on P0.02). */
     int ret = ir_driver_init();
     if (ret) {
