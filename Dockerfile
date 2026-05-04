@@ -19,7 +19,8 @@ RUN apk add --no-cache \
         linux-headers \
         musl-dev \
         gcc \
-        unzip
+        unzip \
+        ccache
 
 # cmake 4.x and west 1.4 are required by NCS v3.3.0; Alpine 3.21 ships cmake 3.x.
 # Python build requirements are pulled directly from the pinned NCS/Zephyr v3.3.0 sources.

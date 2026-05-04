@@ -15,19 +15,19 @@ from an SCD40 sensor.
 
 ## Shell Commands
 
-Connect to `/dev/ttyACM0` (USB-CDC, any baud) for an interactive shell. All commands are under the `ac` parent:
+Connect to `/dev/ttyACM0` (USB-CDC, any baud) for an interactive shell.
 
-| Command                | Description                                                       |
-|------------------------|-------------------------------------------------------------------|
-| `ac off`               | Send power-off IR command immediately                             |
-| `ac scd`               | Print the most recent SCD40 reading (CO2, temperature, humidity)  |
-| `ac cfar on\|off`      | Stream CFAR power readings for threshold tuning                   |
-| `ac threshold [value]` | Get or set the CFAR detection threshold (persisted across reboots)|
-| `ac reboot`            | Warm reboot, preserving Matter pairing state                      |
-| `ac reset`             | Factory reset — clears all pairing data (including threshold) and reboots |
-| `ac qr`                | Reprint QR code and manual pairing code                           |
+| Command                | Description                                                        |
+|------------------------|--------------------------------------------------------------------|
+| `ac off`               | Send power-off IR command immediately                              |
+| `ac scd`               | Print the most recent SCD40 reading (CO2, temperature, humidity)   |
+| `ac cfar on\|off`      | Stream CFAR power readings for threshold tuning                    |
+| `ac threshold [value]` | Get or set the CFAR detection threshold (persisted across reboots) |
+| `matter reset`         | Factory reset — clears all pairing data (including threshold) and reboots |
+| `matter qr`            | Reprint QR code and manual pairing code                            |
+| `reboot`               | Warm reboot, preserving Matter pairing state                       |
 
-The threshold is stored in the NVS `settings_storage` partition and restored on boot. Note that `ac reset` wipes this partition, resetting the threshold to its default of 25×.
+The threshold is stored in the NVS `settings_storage` partition and restored on boot. Note that `matter reset` wipes this partition, resetting the threshold to its default of 25×.
 
 ## Adding a Dynamic Endpoint
 
@@ -143,14 +143,11 @@ This routes through `emberAfExternalAttributeWriteCallback`, updates your backin
 
 ### Docker
 
-Builds run inside a Docker container with NCS v3.3.0 pre-installed.
+Builds run inside a Docker container with NCS v3.3.0 pre-installed. Run these once, in order — `init` requires the image to exist:
 
 ```bash
-# Build the builder image (once)
-make image
-
-# Initialise the NCS workspace into a Docker volume (once per SDK version)
-make init
+make image   # build the builder image
+make init    # download NCS v3.3.0 into a Docker volume
 ```
 
 ### J-Link
