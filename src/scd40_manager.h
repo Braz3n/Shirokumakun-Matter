@@ -11,8 +11,19 @@
 
 #pragma once
 
+#include <stdint.h>
+
 /**
  * Initialise the SCD40 sensor and start periodic measurements.
  * Returns 0 on success, negative errno on failure.
  */
 int scd40_manager_init(void);
+
+struct Scd40Reading {
+    uint16_t co2_ppm;
+    int16_t  temp_001c;
+    uint16_t rh_001pct;
+    bool     valid;
+};
+
+struct Scd40Reading scd40_manager_get_last_reading(void);

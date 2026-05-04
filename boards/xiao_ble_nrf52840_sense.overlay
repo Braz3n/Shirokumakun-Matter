@@ -87,6 +87,9 @@
  * directly to work around the polarity trick needed for 0% duty. */
 &pwm0 { status = "disabled"; };
 
+/* IMU is on I2C0 which is remapped to SCD40 pins — disable to suppress init error. */
+&lsm6ds3tr_c { status = "disabled"; };
+
 /* Enable PDM0 — pinctrl already defined in xiao_ble-pinctrl.dtsi.
  * The Sense board DTS sets clock-source and pinctrl; we only add status. */
 &pdm0 {

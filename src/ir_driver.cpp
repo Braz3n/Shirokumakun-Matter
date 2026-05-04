@@ -150,24 +150,16 @@ void ir_transmit(const struct IrPulse *pulses, uint16_t count) {
     LOG_INF("IR: transmission complete");
 }
 
-static void update_ep4_state(bool failed) {
-    PlatformMgr().LockChipStack();
-    BooleanState::Attributes::StateValue::Set(4, failed);
-    PlatformMgr().UnlockChipStack();
-}
-
 bool ir_send_command(const struct IrPulse *pulses, uint16_t count) {
     for (int attempt = 1; attempt <= IR_RETRY_COUNT; attempt++) {
         ir_transmit(pulses, count);
         pdm_manager_start_listen();
         if (pdm_manager_collect_ack(IR_ACK_TIMEOUT_MS)) {
             LOG_INF("IR: ACK received on attempt %d/%d", attempt, IR_RETRY_COUNT);
-            update_ep4_state(false);
             return true;
         }
         LOG_WRN("IR: no ACK on attempt %d/%d", attempt, IR_RETRY_COUNT);
     }
     LOG_ERR("IR: command failed after %d attempts", IR_RETRY_COUNT);
-    update_ep4_state(true);
     return false;
 }

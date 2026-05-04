@@ -15,11 +15,15 @@
 #include "app/task_executor.h"
 
 #include <app/clusters/identify-server/identify-server.h>
-#include <app/server/OnboardingCodesUtil.h>
+#include <setup_payload/OnboardingCodesUtil.h>
 
 #include <zephyr/logging/log.h>
 
 extern void zcl_callbacks_ready(void);
+
+/* nrf_matter_cluster_init_run_all is called by matter_init.cpp::StartServer() in NCS v3.3.0.
+ * We don't register any entries via NRF_MATTER_CLUSTER_INIT so this is a no-op. */
+extern "C" bool nrf_matter_cluster_init_run_all(void) { return true; }
 
 LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
 
@@ -48,9 +52,6 @@ CHIP_ERROR AppTask::Init() {
     ReturnErrorOnFailure(Nrf::Matter::PrepareServer());
     ReturnErrorOnFailure(Nrf::Matter::StartServer());
 
-    /* Print QR code and manual pairing code to RTT log. */
-    PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
-
     /* Initialize IR driver (PWM-based 38kHz carrier on P0.02). */
     int ret = ir_driver_init();
     if (ret) {
@@ -63,8 +64,7 @@ CHIP_ERROR AppTask::Init() {
         LOG_ERR("SCD40 init failed: %d (sensor may not be connected)", ret);
     }
 
-    /* Initialize PDM microphone (2kHz beep detection → Matter Contact Sensor EP4).
-     * Must be called after StartServer() so the dynamic endpoint can register. */
+    /* Initialize PDM microphone (2kHz beep detection for IR ACK). */
     pdm_manager_init();
 
     /* Enable IR transmission now that init is complete.
