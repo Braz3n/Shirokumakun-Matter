@@ -33,7 +33,6 @@
 #include <cstring>
 
 #include <nrfx_pdm.h>
-#include <drivers/nrfx_errors.h>
 #include <hal/nrf_gpio.h>
 #include <arm_math.h>
 #include <math.h>
@@ -92,8 +91,7 @@ static float                      hann_window[PDM_BUF_SAMPLES];
  * Written via emberAfExternalAttributeWriteCallback from Set(4, ...) in ir_driver.cpp. */
 static bool ep4_state_value = false;
 
-/* nrfx_pdm instance (nrfx >= 3.7.0 multi-instance API) */
-static nrfx_pdm_t pdm_inst = NRFX_PDM_INSTANCE(0);
+static nrfx_pdm_t pdm_inst = NRFX_PDM_INSTANCE(NRF_PDM0);
 
 /* --------------------------------------------------------------------------
  * Matter dynamic endpoint descriptors
@@ -114,10 +112,10 @@ static DataVersion
  * also as EXTERNAL_STORAGE, automatically. */
 
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(descriptorAttrs)
-DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::DeviceTypeList::Id, ARRAY, 254, 0),
-    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ServerList::Id, ARRAY, 254, 0),
-    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ClientList::Id, ARRAY, 254, 0),
-    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::PartsList::Id, ARRAY, 254, 0),
+DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::DeviceTypeList::Id, ARRAY, ATTRIBUTE_LARGEST, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ServerList::Id, ARRAY, ATTRIBUTE_LARGEST, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::ClientList::Id, ARRAY, ATTRIBUTE_LARGEST, 0),
+    DECLARE_DYNAMIC_ATTRIBUTE(Descriptor::Attributes::PartsList::Id, ARRAY, ATTRIBUTE_LARGEST, 0),
     DECLARE_DYNAMIC_ATTRIBUTE_LIST_END();
 
 DECLARE_DYNAMIC_ATTRIBUTE_LIST_BEGIN(identifyAttrs)
@@ -307,8 +305,8 @@ void pdm_manager_start_listen(void) {
     pdm_capture_active = true;
 
     int err = nrfx_pdm_start(&pdm_inst);
-    if (err != NRFX_SUCCESS) {
-        LOG_ERR("PDM: nrfx_pdm_start failed: 0x%x", err);
+    if (err < 0) {
+        LOG_ERR("PDM: nrfx_pdm_start failed: %d", err);
         pdm_capture_active = false;
     }
 }
@@ -319,8 +317,8 @@ bool pdm_manager_collect_ack(uint32_t timeout_ms) {
     pdm_capture_active = false;
 
     int err = nrfx_pdm_stop(&pdm_inst);
-    if (err != NRFX_SUCCESS && err != NRFX_ERROR_INVALID_STATE) {
-        LOG_WRN("PDM: nrfx_pdm_stop unexpected error: 0x%x", err);
+    if (err < 0) {
+        LOG_WRN("PDM: nrfx_pdm_stop unexpected error: %d", err);
     }
 
     return (rc == 0);
@@ -347,7 +345,7 @@ void pdm_manager_init(void) {
     /* --- 2. Wire nrfx_pdm IRQ ---
      * Use IRQ_PRIO_LOWEST: Zephyr's nrfx glue ignores nrfx interrupt_priority
      * (NRFX_IRQ_PRIORITY_SET is a no-op); the only place priority is set is here. */
-    IRQ_CONNECT(PDM_IRQn, IRQ_PRIO_LOWEST, nrfx_isr, nrfx_pdm_irq_handler, 0);
+    IRQ_CONNECT(PDM_IRQn, IRQ_PRIO_LOWEST, nrfx_pdm_irq_handler, &pdm_inst, 0);
     irq_enable(PDM_IRQn);
 
     /* --- 3. Init nrfx_pdm --- */
@@ -356,8 +354,8 @@ void pdm_manager_init(void) {
     cfg.gain_r            = NRF_PDM_GAIN_MAXIMUM;
 
     int err = nrfx_pdm_init(&pdm_inst, &cfg, pdm_event_handler);
-    if (err != NRFX_SUCCESS) {
-        LOG_ERR("PDM: nrfx_pdm_init failed: 0x%x", err);
+    if (err < 0) {
+        LOG_ERR("PDM: nrfx_pdm_init failed: %d", err);
         return;
     }
 
@@ -396,10 +394,10 @@ void pdm_manager_verbose_start(void) {
     pdm_verbose = true;
     if (!pdm_capture_active) {
         int err = nrfx_pdm_start(&pdm_inst);
-        if (err == NRFX_SUCCESS) {
-            pdm_verbose_own = true;
+        if (err < 0) {
+            LOG_ERR("PDM: verbose start failed: %d", err);
         } else {
-            LOG_ERR("PDM: verbose start failed: 0x%x", err);
+            pdm_verbose_own = true;
         }
     }
     /* if pdm_capture_active, PDM is already running — verbose piggybacks */
