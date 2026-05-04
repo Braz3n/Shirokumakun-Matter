@@ -32,6 +32,8 @@
 #include <zephyr/irq.h>
 #include <cstring>
 
+#include <zephyr/settings/settings.h>
+
 #include <nrfx_pdm.h>
 #include <hal/nrf_gpio.h>
 #include <arm_math.h>
@@ -67,6 +69,16 @@ LOG_MODULE_REGISTER(pdm_mgr, LOG_LEVEL_INF);
 #define PDM_CFAR_TRAIN_CELLS 10        /* bins each side used for noise estimate */
 #define PDM_SCALING_FACTOR   1e-6f     /* scale applied before logging */
 static float detect_threshold = 25.0f; /* CFAR multiplier: N× above noise estimate */
+
+static int pdm_settings_set(const char *name, size_t len,
+                             settings_read_cb read_cb, void *cb_arg)
+{
+    if (strcmp(name, "threshold") == 0 && len == sizeof(float)) {
+        read_cb(cb_arg, &detect_threshold, sizeof(float));
+    }
+    return 0;
+}
+SETTINGS_STATIC_HANDLER_DEFINE(pdm, "pdm", NULL, pdm_settings_set, NULL, NULL);
 
 /* --------------------------------------------------------------------------
  * State
@@ -387,6 +399,15 @@ void pdm_manager_init(void) {
     }
 
     LOG_INF("PDM: Dynamic endpoint 4 registered (Contact Sensor / Boolean State)");
+
+    /* --- 7. Load persisted settings (threshold) --- */
+    int settings_err = settings_load_subtree("pdm");
+    if (settings_err) {
+        LOG_WRN("PDM: settings load failed: %d (using default threshold)", settings_err);
+    } else {
+        LOG_INF("PDM: threshold loaded: %.2f", (double)detect_threshold);
+    }
+
     LOG_INF("PDM: Initialized — capture starts on demand");
 }
 
@@ -413,6 +434,13 @@ void pdm_manager_verbose_stop(void) {
 
 void pdm_manager_set_threshold(float t) {
     detect_threshold = t;
+}
+void pdm_manager_save_threshold(float t) {
+    detect_threshold = t;
+    int err = settings_save_one("pdm/threshold", &t, sizeof(float));
+    if (err) {
+        LOG_ERR("PDM: threshold save failed: %d", err);
+    }
 }
 float pdm_manager_get_threshold(void) {
     return detect_threshold;

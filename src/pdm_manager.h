@@ -25,6 +25,7 @@ bool pdm_manager_collect_ack(uint32_t timeout_ms);
 void  pdm_manager_verbose_start(void);
 void  pdm_manager_verbose_stop(void);
 void  pdm_manager_set_threshold(float t);
+void  pdm_manager_save_threshold(float t);
 float pdm_manager_get_threshold(void);
 
 void pdm_manager_set_ep4_state(bool v);

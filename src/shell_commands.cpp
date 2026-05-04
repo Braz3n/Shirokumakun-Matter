@@ -8,6 +8,7 @@
  */
 
 #include <zephyr/shell/shell.h>
+#include <zephyr/sys/reboot.h>
 #include <app/server/Server.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 #include <platform/CHIPDeviceLayer.h>
@@ -69,9 +70,18 @@ static int cmd_threshold(const struct shell *sh, size_t argc, char **argv) {
             shell_error(sh, "threshold must be > 0");
             return -EINVAL;
         }
-        pdm_manager_set_threshold(t);
-        shell_print(sh, "Set to %.6f", (double)t);
+        pdm_manager_save_threshold(t);
+        shell_print(sh, "Set and saved to %.6f", (double)t);
     }
+    return 0;
+}
+
+/* ac reboot — warm reboot without clearing pairing state */
+static int cmd_reboot(const struct shell *sh, size_t argc, char **argv) {
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+    shell_warn(sh, "Rebooting...");
+    sys_reboot(SYS_REBOOT_WARM);
     return 0;
 }
 
@@ -90,6 +100,7 @@ static int cmd_off(const struct shell *sh, size_t argc, char **argv) {
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_ac, SHELL_CMD_ARG(off, NULL, "Send power-off IR command", cmd_off, 1, 0),
+    SHELL_CMD_ARG(reboot, NULL, "Reboot (keeps pairing state)", cmd_reboot, 1, 0),
     SHELL_CMD_ARG(reset, NULL, "Clear pairing state (factory reset)", cmd_reset, 1, 0),
     SHELL_CMD_ARG(qr, NULL, "Print QR code and manual pairing code", cmd_qr, 1, 0),
     SHELL_CMD_ARG(cfar, NULL, "Stream CFAR power on|off", cmd_cfar, 2, 0),
@@ -100,6 +111,7 @@ static int cmd_ac(const struct shell *sh, size_t argc, char **argv) {
     ARG_UNUSED(argv);
     shell_print(sh, "Subcommands:");
     shell_print(sh, "  off        Send power-off IR command");
+    shell_print(sh, "  reboot     Reboot (keeps pairing state)");
     shell_print(sh, "  reset      Clear pairing state (factory reset)");
     shell_print(sh, "  qr         Print QR code and manual pairing code");
     shell_print(sh, "  cfar       Stream CFAR power readings  on|off");
