@@ -38,6 +38,14 @@ build:
 pristine:
 	$(DOCKER_RUN) sh -c "rm -rf /workspace/$(BUILD_DIR) && west build -b $(BOARD) /workspace"
 
+JLINK       := JLinkExe
+JLINK_FLAGS := -nogui 1 -if SWD -speed 4000 -device NRF52840_xxAA -autoconnect 1
+
+# Full erase + flash via JLink. Erases the entire device (including settings_storage),
+# so the device will need to re-commission after this.
+flash:
+	$(JLINK) $(JLINK_FLAGS) -CommanderScript scripts/jlink_flash.jlink
+
 format:
 	clang-format -i $(SRCS)
 

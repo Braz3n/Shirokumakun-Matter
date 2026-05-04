@@ -1,0 +1,5 @@
+erase
+loadfile build/merged.hex
+r
+g
+q
