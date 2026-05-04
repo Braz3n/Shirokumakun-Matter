@@ -23,6 +23,7 @@
 #include <hal/nrf_gpio.h>
 #include <arm_math.h>
 #include <math.h>
+#include <cstdlib>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846

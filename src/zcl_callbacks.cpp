@@ -37,6 +37,8 @@ static AcMode system_mode_to_ac_mode(uint8_t system_mode) {
         return AC_MODE_HEATING; /* Heat */
     case 7:
         return AC_MODE_VENTILATION; /* FanOnly */
+    case 8:
+        return AC_MODE_DEHUMIDIFY; /* Dry */
     default:
         return AC_MODE_COOLING;
     }

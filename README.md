@@ -215,19 +215,12 @@ Logs stream automatically. Type `ac` for the command list.
 
 ## Commission
 
-Default pairing credentials (test values):
-
-| Parameter     | Value                      |
-|---------------|----------------------------|
-| Discriminator | 0xF00 (3840)               |
-| Passcode      | 20202021                   |
-| QR code       | `MT:-24J042C00KA0648G00`   |
-| Manual code   | `34970112332`              |
+Run `ac qr` on the shell to print the current QR code and manual pairing code.
 
 Commission over BLE using Apple Home, Google Home, or chip-tool:
 
 ```bash
-chip-tool pairing ble-thread <node-id> <thread-dataset> 20202021 3840
+chip-tool pairing ble-thread <node-id> <thread-dataset> <passcode> <discriminator>
 ```
 
 ## ZAP Code Generation
@@ -262,6 +255,7 @@ src/
   app_task.cpp/h                        Matter init, task loop
   zcl_callbacks.cpp                     Attribute change -> IR transmission
   shell_commands.cpp                    USB-CDC shell commands (ac *)
+  qrcodegen.c/h                         Vendored QR encoder (MIT, from Nayuki)
   ir_driver.cpp/h                       nRF52840 PWM 38kHz carrier
   ir_protocol.cpp/h                     Hitachi Shirokuma-kun encoding
   scd40_manager.cpp/h                   SCD40 I2C driver, Matter attribute updates

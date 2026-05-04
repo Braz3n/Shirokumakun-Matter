@@ -9,6 +9,7 @@
 
 #include <zephyr/shell/shell.h>
 #include <zephyr/sys/reboot.h>
+#include <qrcodegen.h>
 #include <app/server/Server.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 #include <platform/CHIPDeviceLayer.h>
@@ -31,13 +32,59 @@ static int cmd_reset(const struct shell *sh, size_t argc, char **argv) {
     return 0;
 }
 
-/* ac qr — reprint QR code and manual pairing code */
+/* ac qr — render QR code as ASCII art and print manual pairing code */
 static int cmd_qr(const struct shell *sh, size_t argc, char **argv) {
-    ARG_UNUSED(sh);
     ARG_UNUSED(argc);
     ARG_UNUSED(argv);
-    /* PrintOnboardingCodes logs via ChipLogProgress — appears on all log backends */
-    PrintOnboardingCodes(RendezvousInformationFlags(RendezvousInformationFlag::kBLE));
+
+    char qr_str[64] = {};
+    chip::MutableCharSpan qr_span(qr_str, sizeof(qr_str) - 1);
+    if (GetQRCode(qr_span, RendezvousInformationFlags(RendezvousInformationFlag::kBLE))
+            != CHIP_NO_ERROR) {
+        shell_error(sh, "Failed to get QR code");
+        return -EIO;
+    }
+    qr_str[qr_span.size()] = '\0';
+
+    char manual_str[32] = {};
+    chip::MutableCharSpan manual_span(manual_str, sizeof(manual_str) - 1);
+    if (GetManualPairingCode(manual_span,
+            RendezvousInformationFlags(RendezvousInformationFlag::kBLE))
+            == CHIP_NO_ERROR) {
+        manual_str[manual_span.size()] = '\0';
+    }
+
+    static uint8_t qr_buf[qrcodegen_BUFFER_LEN_FOR_VERSION(9)];
+    static uint8_t qr_tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(9)];
+    if (!qrcodegen_encodeText(qr_str, qr_tmp, qr_buf,
+                              qrcodegen_Ecc_LOW, 1, 9,
+                              qrcodegen_Mask_AUTO, true)) {
+        shell_error(sh, "QR encode failed");
+        return -ENOMEM;
+    }
+
+    /* Render: dark module → "  " (terminal bg), light module → "##" (terminal fg).
+     * Reads correctly on dark-background terminals; most scanners handle the inversion. */
+    int size  = qrcodegen_getSize(qr_buf);
+    int quiet = 2;
+    char line[256];
+
+    for (int y = -quiet; y < size + quiet; y++) {
+        int pos = 0;
+        for (int x = -quiet; x < size + quiet; x++) {
+            bool dark = (x >= 0 && x < size && y >= 0 && y < size)
+                        && qrcodegen_getModule(qr_buf, x, y);
+            line[pos++] = dark ? ' ' : '#';
+            line[pos++] = dark ? ' ' : '#';
+        }
+        line[pos] = '\0';
+        shell_print(sh, "%s", line);
+    }
+
+    shell_print(sh, "");
+    shell_print(sh, "QR:     %s", qr_str);
+    shell_print(sh, "Manual: %s", manual_str);
+
     return 0;
 }
 
