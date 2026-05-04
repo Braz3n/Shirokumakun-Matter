@@ -32,7 +32,6 @@ void ir_transmit(const struct IrPulse *pulses, uint16_t count);
 /**
  * Transmit a command with up to IR_RETRY_COUNT attempts, waiting for a
  * 2kHz PDM ACK from the AC unit after each attempt.
- * Updates EP4 (Contact Sensor): false = ACK received, true = all attempts failed.
  * Returns true if ACK was received, false if all retries exhausted.
  * Blocks the calling thread for the full retry sequence — call ir_dispatch_command
  * instead to enqueue from the Matter thread without blocking.

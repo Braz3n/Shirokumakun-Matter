@@ -1,20 +1,33 @@
 # Matter AC Controller (nRF Connect SDK)
 
-Matter-over-Thread air conditioner controller for the Seeed XIAO nRF52840.
+Matter-over-Thread air conditioner controller for the Seeed XIAO nRF52840 Sense.
 Transmits Hitachi Shirokuma-kun IR commands and reads CO2/temperature/humidity
 from an SCD40 sensor.
 
 ## Endpoints
 
-| EP | Device Type | Clusters |
-|----|-------------|----------|
-| 0  | Root Node   | System clusters |
-| 1  | Thermostat + Fan | Thermostat, Fan Control |
-| 2  | Humidity Sensor | Relative Humidity Measurement |
-| 3  | Air Quality Sensor | Air Quality, CO2 Concentration |
-| 4  | Contact Sensor (dynamic) | Descriptor, Identify, Boolean State |
+| EP | Device Type        | Clusters                          |
+|----|--------------------|-----------------------------------|
+| 0  | Root Node          | System clusters                   |
+| 1  | Thermostat + Fan   | Thermostat, Fan Control           |
+| 2  | Humidity Sensor    | Relative Humidity Measurement     |
+| 3  | Air Quality Sensor | Air Quality, CO2 Concentration    |
 
-EP4 is a **dynamic endpoint** (no ZAP entry) representing IR ACK status — closed = OK, open = failed after retries.
+## Shell Commands
+
+Connect to `/dev/ttyACM0` (USB-CDC, any baud) for an interactive shell. All commands are under the `ac` parent:
+
+| Command                | Description                                                       |
+|------------------------|-------------------------------------------------------------------|
+| `ac off`               | Send power-off IR command immediately                             |
+| `ac scd`               | Print the most recent SCD40 reading (CO2, temperature, humidity)  |
+| `ac cfar on\|off`      | Stream CFAR power readings for threshold tuning                   |
+| `ac threshold [value]` | Get or set the CFAR detection threshold (persisted across reboots)|
+| `ac reboot`            | Warm reboot, preserving Matter pairing state                      |
+| `ac reset`             | Factory reset — clears all pairing data (including threshold) and reboots |
+| `ac qr`                | Reprint QR code and manual pairing code                           |
+
+The threshold is stored in the NVS `settings_storage` partition and restored on boot. Note that `ac reset` wipes this partition, resetting the threshold to its default of 25×.
 
 ## Adding a Dynamic Endpoint
 
@@ -22,9 +35,9 @@ Static endpoints are declared in `ac_controller.zap` and codegen'd into `zap-gen
 
 ### Checklist
 
-**1. `chip_project_config.h` — raise the dynamic endpoint count**
+**1. `chip_project_config.h` — set the dynamic endpoint count**
 ```cpp
-#define CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT 1  // increment if adding more
+#define CHIP_DEVICE_CONFIG_DYNAMIC_ENDPOINT_COUNT 1  // one per dynamic endpoint added
 ```
 
 **2. Declare attribute lists and cluster list**
@@ -118,90 +131,60 @@ This routes through `emberAfExternalAttributeWriteCallback`, updates your backin
 
 ## Hardware
 
-- **MCU:** Seeed XIAO nRF52840 (BLE + 802.15.4)
-- **IR LED:** on P0.02 (PWM0, 38 kHz carrier)
-- **SCD40 sensor:** on P0.04 (SDA) / P0.05 (SCL), I2C0 at 100 kHz
-- **Debug:** J-Link + RTT (USB disabled to save RAM)
+- **MCU:**    Seeed XIAO nRF52840 Sense (BLE + 802.15.4)
+- **IR LED:** P0.02 (PWM0, 38 kHz carrier)
+- **SCD40:**  P0.04 (SDA) / P0.05 (SCL), I2C0 at 100 kHz
+- **PDM mic:** P1.00 (CLK) / P0.16 (DIN), enable P1.10 active HIGH
+- **Shell:**  USB-CDC ACM0 (logs + interactive shell)
+- **DFU:**    USB-CDC ACM1 (SMP/mcumgr)
+- **Flash:**  J-Link SWD (initial programming)
 
 ## Prerequisites
 
-### nRF Connect SDK v2.9.2
+### Docker
 
-Install via [nRF Connect for VS Code](https://www.nordicsemi.com/Products/Development-tools/nRF-Connect-for-VS-Code)
-or manually:
-
-```bash
-pip3 install west
-mkdir ~/ncs && cd ~/ncs
-west init -m https://github.com/nrfconnect/sdk-nrf --mr v2.9.2
-west update
-```
-
-### Toolchain
-
-The build requires the Zephyr SDK (ARM GCC cross-compiler, GN, etc.). The
-easiest way to get it is via `nrfutil`:
+Builds run inside a Docker container with NCS v3.3.0 pre-installed.
 
 ```bash
-# Install nrfutil if you don't have it
-pip3 install nrfutil
+# Build the builder image (once)
+make image
 
-# Install the toolchain bundle matching NCS v2.9.2
-nrfutil toolchain-manager install --ncs-version v2.9.2 --install-dir ~/ncs/toolchains
+# Initialise the NCS workspace into a Docker volume (once per SDK version)
+make init
 ```
-
-Alternatively, install the [Zephyr SDK](https://github.com/zephyrproject-rtos/sdk-ng/releases)
-manually (v0.16.1+) and ensure `arm-zephyr-eabi-gcc` and `gn` are on your PATH.
-
-After installation, the toolchain lives at `~/ncs/toolchains/<hash>/`. The
-build needs `gn` from this toolchain on PATH — see the Build section below.
 
 ### J-Link
 
-Install [SEGGER J-Link](https://www.segger.com/downloads/jlink/) for flashing
-and RTT debug output.
+Install [SEGGER J-Link](https://www.segger.com/downloads/jlink/) for initial flashing.
+
+### mcumgr-client
+
+Install [mcumgr-client](https://github.com/vouch-opensource/mcumgr-client) for DFU over USB.
 
 ## Build
 
 ```bash
-cd matter-ac-ncs
-
-# Add GN to PATH (adjust toolchain hash if yours differs)
-export PATH="$HOME/ncs/toolchains/7795df4459/opt/bin:$PATH"
-export ZEPHYR_BASE="$HOME/ncs/zephyr"
-
-west build -b xiao_ble/nrf52840/sense
-```
-
-Use `-p always` for a pristine rebuild (required after devicetree or Kconfig
-changes):
-
-```bash
-west build -b xiao_ble/nrf52840/sense -p always
+make build      # incremental build
+make pristine   # clean rebuild (required after devicetree or Kconfig changes)
 ```
 
 ## Flash
+
+Initial programming via J-Link (erases the entire device including settings):
 
 ```bash
 make flash
 ```
 
-Or erase + flash (use for first-time programming):
-
-```bash
-make flash-erase
-```
-
 ## DFU over USB
 
-Once the device is running, firmware can be updated over USB without a J-Link using
-[mcumgr-client](https://github.com/vouch-opensource/mcumgr-client):
+Once the device is running, firmware can be updated over USB without a J-Link:
 
 ```bash
 make dfu
 ```
 
-This uploads `build/matter-ac-ncs/zephyr/zephyr.signed.bin` to the device via SMP over `/dev/ttyACM1`.
+This builds, uploads `build/workspace/zephyr/zephyr.signed.bin` via SMP over ACM1, marks the new image for test, and resets the device.
 
 ### Zephyr CDC ACM bug
 
@@ -218,24 +201,28 @@ building (suggested by the mcumgr-client README):
 
 This fix will need to be reapplied after `west update`.
 
-## RTT Logs
+## USB Shell
 
-Start J-Link RTT Viewer or:
+Connect to `/dev/ttyACM0` at any baud (DTR-gated — open a terminal to activate):
 
 ```bash
-JLinkRTTClient
+screen /dev/ttyACM0
+# or
+minicom -D /dev/ttyACM0
 ```
+
+Logs stream automatically. Type `ac` for the command list.
 
 ## Commission
 
 Default pairing credentials (test values):
 
-| Parameter | Value |
-|-----------|-------|
-| Discriminator | 0xF00 (3840) |
-| Passcode | 20202021 |
-| QR code | `MT:-24J042C00KA0648G00` |
-| Manual code | `34970112332` |
+| Parameter     | Value                      |
+|---------------|----------------------------|
+| Discriminator | 0xF00 (3840)               |
+| Passcode      | 20202021                   |
+| QR code       | `MT:-24J042C00KA0648G00`   |
+| Manual code   | `34970112332`              |
 
 Commission over BLE using Apple Home, Google Home, or chip-tool:
 
@@ -261,22 +248,26 @@ python3 $HOME/ncs/modules/lib/matter/scripts/tools/zap/generate.py \
 ## Project Structure
 
 ```
-CMakeLists.txt               Build configuration
-Kconfig                      OpenThread MTD defaults
-prj.conf                     Zephyr/Matter Kconfig
-sysbuild.conf                Sysbuild (Matter + no OTA)
+CMakeLists.txt                          Build configuration
+Kconfig                                 OpenThread MTD defaults
+prj.conf                                Zephyr/Matter Kconfig
+sysbuild.conf                           Sysbuild (Matter + no OTA)
+Makefile                                Docker build, flash, and DFU targets
 boards/
-  xiao_ble_nrf52840.overlay  Pin remapping, flash layout
+  xiao_ble_nrf52840.overlay             Base: pin remapping, flash layout
+  xiao_ble_nrf52840_sense.overlay       Sense: adds PDM microphone
+pm_static_xiao_ble_nrf52840_sense.yml  Partition manager (flash layout)
 src/
-  main.cpp                   Entry point
-  app_task.cpp/h             Matter init, task loop
-  zcl_callbacks.cpp          Attribute change -> IR transmission
-  ir_driver.cpp/h            nRF52840 PWM 38kHz carrier
-  ir_protocol.cpp/h          Hitachi Shirokuma-kun encoding
-  scd40_manager.cpp/h        SCD40 I2C driver, Matter attribute updates
-  pdm_manager.cpp/h          PDM mic, 2kHz FFT+CA-CFAR, dynamic EP4 (Contact Sensor)
-  chip_project_config.h      CHIP project config (dynamic endpoint count)
-  ac_controller.zap          ZAP data model definition
-  ac_controller.matter       Generated .matter IDL
-  zap-generated/             Auto-generated cluster code
+  main.cpp                              Entry point
+  app_task.cpp/h                        Matter init, task loop
+  zcl_callbacks.cpp                     Attribute change -> IR transmission
+  shell_commands.cpp                    USB-CDC shell commands (ac *)
+  ir_driver.cpp/h                       nRF52840 PWM 38kHz carrier
+  ir_protocol.cpp/h                     Hitachi Shirokuma-kun encoding
+  scd40_manager.cpp/h                   SCD40 I2C driver, Matter attribute updates
+  pdm_manager.cpp/h                     PDM mic, 2kHz FFT+CA-CFAR, IR ACK detection
+  chip_project_config.h                 CHIP project config (dynamic endpoint count)
+  ac_controller.zap                     ZAP data model definition
+  ac_controller.matter                  Generated .matter IDL
+  zap-generated/                        Auto-generated cluster code
 ```

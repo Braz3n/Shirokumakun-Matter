@@ -64,8 +64,7 @@ CHIP_ERROR AppTask::Init() {
         LOG_ERR("SCD40 init failed: %d (sensor may not be connected)", ret);
     }
 
-    /* Initialize PDM microphone (2kHz beep detection → Matter Contact Sensor EP4).
-     * Must be called after StartServer() so the dynamic endpoint can register. */
+    /* Initialize PDM microphone (2kHz beep detection for IR ACK). */
     pdm_manager_init();
 
     /* Enable IR transmission now that init is complete.
