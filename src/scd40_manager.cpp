@@ -41,6 +41,7 @@ LOG_MODULE_REGISTER(scd40, LOG_LEVEL_INF);
 static const struct device *i2c_dev;
 static struct k_timer       poll_timer;
 static struct k_work        poll_work;
+static struct Scd40Reading  last_reading;
 
 using namespace chip;
 using namespace chip::app::Clusters;
@@ -170,8 +171,11 @@ static void update_matter_attributes(uint16_t co2_ppm, int16_t temp_001c, uint16
 
     PlatformMgr().UnlockChipStack();
 
-    LOG_INF("SCD40: CO2=%u ppm, T=%d.%02d C, RH=%u.%02u %%", co2_ppm, temp_001c / 100,
-            (temp_001c >= 0 ? temp_001c : -temp_001c) % 100, rh_001pct / 100, rh_001pct % 100);
+    last_reading = {co2_ppm, temp_001c, rh_001pct, true};
+}
+
+struct Scd40Reading scd40_manager_get_last_reading(void) {
+    return last_reading;
 }
 
 static void poll_work_handler(struct k_work *work) {

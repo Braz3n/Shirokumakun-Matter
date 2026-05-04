@@ -13,6 +13,7 @@
 #include <setup_payload/OnboardingCodesUtil.h>
 #include <platform/CHIPDeviceLayer.h>
 #include "pdm_manager.h"
+#include "scd40_manager.h"
 #include "ir_driver.h"
 #include "ir_protocol.h"
 
@@ -85,6 +86,23 @@ static int cmd_reboot(const struct shell *sh, size_t argc, char **argv) {
     return 0;
 }
 
+/* ac scd — print last SCD40 reading */
+static int cmd_scd(const struct shell *sh, size_t argc, char **argv) {
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+    struct Scd40Reading r = scd40_manager_get_last_reading();
+    if (!r.valid) {
+        shell_warn(sh, "No reading yet");
+        return 0;
+    }
+    int16_t t_abs = r.temp_001c >= 0 ? r.temp_001c : -r.temp_001c;
+    shell_print(sh, "CO2: %u ppm  T: %s%d.%02d C  RH: %u.%02u %%",
+                r.co2_ppm,
+                r.temp_001c < 0 ? "-" : "", t_abs / 100, t_abs % 100,
+                r.rh_001pct / 100, r.rh_001pct % 100);
+    return 0;
+}
+
 /* ac off — send power-off IR command immediately */
 static int cmd_off(const struct shell *sh, size_t argc, char **argv) {
     ARG_UNUSED(argc);
@@ -100,6 +118,7 @@ static int cmd_off(const struct shell *sh, size_t argc, char **argv) {
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_ac, SHELL_CMD_ARG(off, NULL, "Send power-off IR command", cmd_off, 1, 0),
+    SHELL_CMD_ARG(scd, NULL, "Print last SCD40 reading", cmd_scd, 1, 0),
     SHELL_CMD_ARG(reboot, NULL, "Reboot (keeps pairing state)", cmd_reboot, 1, 0),
     SHELL_CMD_ARG(reset, NULL, "Clear pairing state (factory reset)", cmd_reset, 1, 0),
     SHELL_CMD_ARG(qr, NULL, "Print QR code and manual pairing code", cmd_qr, 1, 0),
@@ -111,6 +130,7 @@ static int cmd_ac(const struct shell *sh, size_t argc, char **argv) {
     ARG_UNUSED(argv);
     shell_print(sh, "Subcommands:");
     shell_print(sh, "  off        Send power-off IR command");
+    shell_print(sh, "  scd        Print last SCD40 reading");
     shell_print(sh, "  reboot     Reboot (keeps pairing state)");
     shell_print(sh, "  reset      Clear pairing state (factory reset)");
     shell_print(sh, "  qr         Print QR code and manual pairing code");
