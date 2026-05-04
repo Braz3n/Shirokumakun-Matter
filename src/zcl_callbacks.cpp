@@ -162,21 +162,20 @@ static void send_ir_if_changed(void) {
 
 void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath &attributePath,
                                        uint8_t type, uint16_t size, uint8_t *value) {
-    ClusterId   clusterId   = attributePath.mClusterId;
-    AttributeId attributeId = attributePath.mAttributeId;
+    ClusterId clusterId = attributePath.mClusterId;
 
     if (attributePath.mEndpointId != 1) {
         return;
     }
 
     if (clusterId == OnOff::Id) {
-        ChipLogProgress(Zcl, "OnOff attr 0x%04x changed", attributeId);
+        ChipLogProgress(Zcl, "OnOff attr 0x%04x changed", attributePath.mAttributeId);
         send_ir_if_changed();
     } else if (clusterId == Thermostat::Id) {
-        ChipLogProgress(Zcl, "Thermostat attr 0x%04x changed", attributeId);
+        ChipLogProgress(Zcl, "Thermostat attr 0x%04x changed", attributePath.mAttributeId);
         send_ir_if_changed();
     } else if (clusterId == FanControl::Id) {
-        ChipLogProgress(Zcl, "FanControl attr 0x%04x changed", attributeId);
+        ChipLogProgress(Zcl, "FanControl attr 0x%04x changed", attributePath.mAttributeId);
         send_ir_if_changed();
     }
 }

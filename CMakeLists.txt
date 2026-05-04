@@ -39,6 +39,18 @@ target_sources(app PRIVATE
     src/qrcodegen.c
 )
 
+set_source_files_properties(
+    src/main.cpp
+    src/app_task.cpp
+    src/zcl_callbacks.cpp
+    src/ir_driver.cpp
+    src/ir_protocol.cpp
+    src/scd40_manager.cpp
+    src/pdm_manager.cpp
+    src/shell_commands.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Werror;-Wno-unused-parameter;-Wno-missing-field-initializers"
+)
+
 chip_configure_data_model(app
     INCLUDE_SERVER
     BYPASS_IDL
