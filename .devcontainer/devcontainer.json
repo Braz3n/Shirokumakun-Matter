@@ -1,0 +1,35 @@
+{
+    "name": "Matter AC Controller (NCS v3.3.0)",
+    "build": {
+        "dockerfile": "../Dockerfile"
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+    "mounts": [
+        "source=ncs-v3.3.0,target=/ncs,type=volume",
+        "source=ccache-matter-ac-ncs,target=/root/.ccache,type=volume"
+    ],
+    "remoteEnv": {
+        "ZEPHYR_BASE": "/ncs/zephyr",
+        "ZEPHYR_TOOLCHAIN_VARIANT": "zephyr",
+        "ZEPHYR_SDK_INSTALL_DIR": "/opt/zephyr-sdk-0.17.0"
+    },
+    // Initialise the NCS workspace on first container creation only.
+    // Subsequent opens skip straight to the terminal (guard on /ncs/zephyr).
+    "postCreateCommand": "[ -d /ncs/zephyr ] || (cd /ncs && west init -l /workspace && west update)",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                "twxs.cmake"
+            ],
+            "settings": {
+                // Don't let CMake Tools try to configure before west build has
+                // generated CMakeCache.txt — run 'make build' first, then
+                // IntelliSense picks up build/compile_commands.json automatically.
+                "cmake.configureOnOpen": false
+            }
+        }
+    }
+}
