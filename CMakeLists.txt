@@ -30,6 +30,7 @@ target_sources(app PRIVATE
 target_sources(app PRIVATE
     src/main.cpp
     src/app_task.cpp
+    src/hw_pairing.cpp
     src/zcl_callbacks.cpp
     src/ir_driver.cpp
     src/ir_protocol.cpp
@@ -42,6 +43,7 @@ target_sources(app PRIVATE
 set_source_files_properties(
     src/main.cpp
     src/app_task.cpp
+    src/hw_pairing.cpp
     src/zcl_callbacks.cpp
     src/ir_driver.cpp
     src/ir_protocol.cpp

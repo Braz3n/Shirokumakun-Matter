@@ -7,6 +7,7 @@
  */
 
 #include "app_task.h"
+#include "hw_pairing.h"
 #include "ir_driver.h"
 #include "scd40_manager.h"
 #include "pdm_manager.h"
@@ -48,6 +49,9 @@ void AppTask::IdentifyStopHandler(Identify *) {
 }
 
 CHIP_ERROR AppTask::Init() {
+    /* Derive discriminator + SPAKE2+ passcode from FICR hardware ID. */
+    ReturnErrorOnFailure(HwPairing::Init());
+
     /* Initialize and start the Matter server. */
     ReturnErrorOnFailure(Nrf::Matter::PrepareServer());
     ReturnErrorOnFailure(Nrf::Matter::StartServer());
