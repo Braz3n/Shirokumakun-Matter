@@ -110,6 +110,20 @@ SHELL_CMD_REGISTER(ac, &sub_ac, "AC controller commands", cmd_ac);
  * matter commands
  * ------------------------------------------------------------------------- */
 
+/* matter info — print Basic Information cluster attributes */
+static int cmd_info(const struct shell *sh, size_t argc, char **argv)
+{
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+
+    shell_print(sh, "Vendor:       " CONFIG_CHIP_DEVICE_VENDOR_NAME);
+    shell_print(sh, "Product:      " CONFIG_CHIP_DEVICE_PRODUCT_NAME);
+    shell_print(sh, "Serial:       " CONFIG_CHIP_DEVICE_SERIAL_NUMBER);
+    shell_print(sh, "SW Version:   " CONFIG_CHIP_DEVICE_SOFTWARE_VERSION_STRING);
+
+    return 0;
+}
+
 /* matter reset — clear all fabrics and reboot into unpaired state */
 static int cmd_reset(const struct shell *sh, size_t argc, char **argv) {
     ARG_UNUSED(argc);
@@ -186,8 +200,9 @@ static int cmd_matter(const struct shell *sh, size_t argc, char **argv) {
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_matter,
-    SHELL_CMD_ARG(reset, NULL, "Factory reset (clears all pairing data)", cmd_reset, 1, 0),
-    SHELL_CMD_ARG(qr,    NULL, "Print QR code and manual pairing code",   cmd_qr,    1, 0),
+    SHELL_CMD_ARG(info,  NULL, "Print Basic Information cluster attributes", cmd_info,  1, 0),
+    SHELL_CMD_ARG(reset, NULL, "Factory reset (clears all pairing data)",    cmd_reset, 1, 0),
+    SHELL_CMD_ARG(qr,    NULL, "Print QR code and manual pairing code",      cmd_qr,    1, 0),
     SHELL_SUBCMD_SET_END);
 SHELL_CMD_REGISTER(matter, &sub_matter, "Matter pairing commands", cmd_matter);
 
