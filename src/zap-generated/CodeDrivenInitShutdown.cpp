@@ -23,9 +23,8 @@
 
 using namespace chip;
 
-void MatterClusterServerInitCallback(EndpointId endpoint, ClusterId  clusterId) {
-    switch (clusterId)
-    {
+void MatterClusterServerInitCallback(EndpointId endpoint, ClusterId clusterId) {
+    switch (clusterId) {
     case app::Clusters::Identify::Id:
         MatterIdentifyClusterInitCallback(endpoint);
         break;
@@ -53,9 +52,6 @@ void MatterClusterServerInitCallback(EndpointId endpoint, ClusterId  clusterId) 
     case app::Clusters::SoftwareDiagnostics::Id:
         MatterSoftwareDiagnosticsClusterInitCallback(endpoint);
         break;
-    case app::Clusters::WiFiNetworkDiagnostics::Id:
-        MatterWiFiNetworkDiagnosticsClusterInitCallback(endpoint);
-        break;
     case app::Clusters::AdministratorCommissioning::Id:
         MatterAdministratorCommissioningClusterInitCallback(endpoint);
         break;
@@ -69,8 +65,7 @@ void MatterClusterServerInitCallback(EndpointId endpoint, ClusterId  clusterId) 
 }
 
 void MatterClusterServerShutdownCallback(EndpointId endpoint, ClusterId clusterId) {
-    switch (clusterId)
-    {
+    switch (clusterId) {
     case app::Clusters::Identify::Id:
         MatterIdentifyClusterShutdownCallback(endpoint);
         break;
@@ -97,9 +92,6 @@ void MatterClusterServerShutdownCallback(EndpointId endpoint, ClusterId clusterI
         break;
     case app::Clusters::SoftwareDiagnostics::Id:
         MatterSoftwareDiagnosticsClusterShutdownCallback(endpoint);
-        break;
-    case app::Clusters::WiFiNetworkDiagnostics::Id:
-        MatterWiFiNetworkDiagnosticsClusterShutdownCallback(endpoint);
         break;
     case app::Clusters::AdministratorCommissioning::Id:
         MatterAdministratorCommissioningClusterShutdownCallback(endpoint);

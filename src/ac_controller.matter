@@ -2389,7 +2389,6 @@ cluster CarbonDioxideConcentrationMeasurement = 1037 {
 
 endpoint 0 {
   device type ma_rootdevice = 22, version 3;
-  device type ma_otarequestor = 18, version 1;
 
   binding cluster OtaSoftwareUpdateProvider;
 
@@ -2444,23 +2443,6 @@ endpoint 0 {
     callback attribute attributeList;
     ram      attribute featureMap default = 0;
     ram      attribute clusterRevision default = 4;
-  }
-
-  server cluster OtaSoftwareUpdateRequestor {
-    emits event StateTransition;
-    emits event VersionApplied;
-    emits event DownloadError;
-    callback attribute defaultOTAProviders;
-    ram      attribute updatePossible default = 1;
-    ram      attribute updateState default = 0;
-    ram      attribute updateStateProgress;
-    callback attribute generatedCommandList;
-    callback attribute acceptedCommandList;
-    callback attribute attributeList;
-    ram      attribute featureMap default = 0;
-    ram      attribute clusterRevision default = 1;
-
-    handle command AnnounceOTAProvider;
   }
 
   server cluster GeneralCommissioning {
@@ -2622,24 +2604,6 @@ endpoint 0 {
     ram      attribute clusterRevision default = 3;
 
     handle command ResetCounts;
-  }
-
-  server cluster WiFiNetworkDiagnostics {
-    callback attribute bssid;
-    callback attribute securityType;
-    callback attribute wiFiVersion;
-    callback attribute channelNumber;
-    callback attribute rssi;
-    callback attribute beaconRxCount;
-    callback attribute packetMulticastRxCount;
-    callback attribute packetMulticastTxCount;
-    callback attribute packetUnicastRxCount;
-    callback attribute packetUnicastTxCount;
-    callback attribute generatedCommandList;
-    callback attribute acceptedCommandList;
-    callback attribute attributeList;
-    ram      attribute featureMap default = 1;
-    ram      attribute clusterRevision default = 0x0001;
   }
 
   server cluster AdministratorCommissioning {

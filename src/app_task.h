@@ -6,8 +6,6 @@
 
 #include <platform/CHIPDeviceLayer.h>
 
-struct Identify;
-
 class AppTask {
 public:
 	static AppTask &Instance()
@@ -17,9 +15,6 @@ public:
 	}
 
 	CHIP_ERROR StartApp();
-
-	static void IdentifyStartHandler(Identify *ident);
-	static void IdentifyStopHandler(Identify *ident);
 
 private:
 	CHIP_ERROR Init();

@@ -32,7 +32,6 @@ void MatterDiagnosticLogsPluginServerInitCallback();
 void MatterGeneralDiagnosticsPluginServerInitCallback();
 void MatterSoftwareDiagnosticsPluginServerInitCallback();
 void MatterThreadNetworkDiagnosticsPluginServerInitCallback();
-void MatterWiFiNetworkDiagnosticsPluginServerInitCallback();
 void MatterAdministratorCommissioningPluginServerInitCallback();
 void MatterOperationalCredentialsPluginServerInitCallback();
 void MatterGroupKeyManagementPluginServerInitCallback();
@@ -42,4 +41,25 @@ void MatterFanControlPluginServerInitCallback();
 void MatterRelativeHumidityMeasurementPluginServerInitCallback();
 void MatterCarbonDioxideConcentrationMeasurementPluginServerInitCallback();
 
-#define MATTER_PLUGINS_INIT MatterIdentifyPluginServerInitCallback(); MatterGroupsPluginServerInitCallback(); MatterOnOffPluginServerInitCallback(); MatterDescriptorPluginServerInitCallback(); MatterBindingPluginServerInitCallback(); MatterAccessControlPluginServerInitCallback(); MatterBasicInformationPluginServerInitCallback(); MatterGeneralCommissioningPluginServerInitCallback(); MatterNetworkCommissioningPluginServerInitCallback(); MatterDiagnosticLogsPluginServerInitCallback(); MatterGeneralDiagnosticsPluginServerInitCallback(); MatterSoftwareDiagnosticsPluginServerInitCallback(); MatterThreadNetworkDiagnosticsPluginServerInitCallback(); MatterWiFiNetworkDiagnosticsPluginServerInitCallback(); MatterAdministratorCommissioningPluginServerInitCallback(); MatterOperationalCredentialsPluginServerInitCallback(); MatterGroupKeyManagementPluginServerInitCallback(); MatterAirQualityPluginServerInitCallback(); MatterThermostatPluginServerInitCallback(); MatterFanControlPluginServerInitCallback(); MatterRelativeHumidityMeasurementPluginServerInitCallback(); MatterCarbonDioxideConcentrationMeasurementPluginServerInitCallback(); 
+#define MATTER_PLUGINS_INIT                                                                        \
+    MatterIdentifyPluginServerInitCallback();                                                      \
+    MatterGroupsPluginServerInitCallback();                                                        \
+    MatterOnOffPluginServerInitCallback();                                                         \
+    MatterDescriptorPluginServerInitCallback();                                                    \
+    MatterBindingPluginServerInitCallback();                                                       \
+    MatterAccessControlPluginServerInitCallback();                                                 \
+    MatterBasicInformationPluginServerInitCallback();                                              \
+    MatterGeneralCommissioningPluginServerInitCallback();                                          \
+    MatterNetworkCommissioningPluginServerInitCallback();                                          \
+    MatterDiagnosticLogsPluginServerInitCallback();                                                \
+    MatterGeneralDiagnosticsPluginServerInitCallback();                                            \
+    MatterSoftwareDiagnosticsPluginServerInitCallback();                                           \
+    MatterThreadNetworkDiagnosticsPluginServerInitCallback();                                      \
+    MatterAdministratorCommissioningPluginServerInitCallback();                                    \
+    MatterOperationalCredentialsPluginServerInitCallback();                                        \
+    MatterGroupKeyManagementPluginServerInitCallback();                                            \
+    MatterAirQualityPluginServerInitCallback();                                                    \
+    MatterThermostatPluginServerInitCallback();                                                    \
+    MatterFanControlPluginServerInitCallback();                                                    \
+    MatterRelativeHumidityMeasurementPluginServerInitCallback();                                   \
+    MatterCarbonDioxideConcentrationMeasurementPluginServerInitCallback();

@@ -1,37 +1,49 @@
-FROM alpine:3.21
+FROM debian:bookworm-slim
 
-# gcompat + libstdc++ provide glibc compatibility for the arm-zephyr-eabi toolchain binaries,
-# which are dynamically linked against glibc.
-RUN apk add --no-cache \
-        gcompat \
-        libstdc++ \
+RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
-        py3-pip \
+        python3-pip \
+        python3-venv \
         git \
-        bash \
         make \
         wget \
+        curl \
         tar \
-        xz \
-        dtc \
+        xz-utils \
+        device-tree-compiler \
         gperf \
         file \
-        linux-headers \
-        musl-dev \
+        linux-libc-dev \
         gcc \
+        g++ \
         unzip \
-        ccache
+        ccache \
+        ninja-build \
+        libffi-dev \
+        libssl-dev \
+        && rm -rf /var/lib/apt/lists/*
 
-# cmake 4.x and west 1.4 are required by NCS v3.3.0; Alpine 3.21 ships cmake 3.x.
+# cmake 4.x is required by NCS v3.3.0; Debian bookworm ships 3.x.
 # Python build requirements are pulled directly from the pinned NCS/Zephyr v3.3.0 sources.
 # Download pre-built static GN binary from CIPD (pinned to the commit NCS v3.3.0 uses).
-# Building GN from source fails on Alpine/musl due to stat64/lstat64 ABI differences vs glibc.
 ARG GN_COMMIT=71305b07d708830ed7b96006dfa773a79ff313fe
 RUN wget -qO /tmp/gn.zip \
         "https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/git_revision:${GN_COMMIT}" && \
     unzip -q /tmp/gn.zip gn -d /usr/local/bin && \
     chmod +x /usr/local/bin/gn && \
     rm /tmp/gn.zip
+
+# ZAP CLI for cluster/endpoint generation. Version pinned to match
+# the SDK's scripts/setup/zap.json expectation (MIN_ZAP_VERSION 2025.10.23).
+ARG ZAP_VERSION=v2025.10.23-nightly.2
+RUN mkdir -p /opt/zap && \
+    wget -qO /tmp/zap.zip \
+        "https://chrome-infra-packages.appspot.com/dl/experimental/matter/zap/linux-amd64/+/version:${ZAP_VERSION}" && \
+    unzip -q /tmp/zap.zip zap-cli -d /opt/zap && \
+    chmod +x /opt/zap/zap-cli && \
+    rm /tmp/zap.zip
+
+ENV ZAP_INSTALL_PATH=/opt/zap
 
 # python_path.py shim: Matter's codegen_paths.py imports PythonPath from scripts/setup/,
 # which is absent from the NCS sdk-matter-fork. Install into site-packages so it is

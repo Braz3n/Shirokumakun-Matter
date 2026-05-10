@@ -36,7 +36,7 @@ LOG_MODULE_REGISTER(scd40, LOG_LEVEL_INF);
 #define SCD40_CMD_READ_MEASUREMENT 0xEC05
 #define SCD40_CMD_STOP_PERIODIC    0x3F86
 
-#define POLL_INTERVAL_SEC 30
+#define POLL_INTERVAL_SEC 15
 
 static const struct device *i2c_dev;
 static struct k_timer       poll_timer;

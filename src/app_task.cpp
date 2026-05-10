@@ -15,7 +15,9 @@
 #include "app/matter_init.h"
 #include "app/task_executor.h"
 
-#include <app/clusters/identify-server/identify-server.h>
+#include <app/DefaultTimerDelegate.h>
+#include <app/clusters/identify-server/IdentifyCluster.h>
+#include <data-model-providers/codegen/CodegenDataModelProvider.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 
 #include <zephyr/logging/log.h>
@@ -35,18 +37,19 @@ using namespace ::chip::DeviceLayer;
 namespace {
 constexpr EndpointId kThermostatEndpointId = 1;
 
-/* Identify cluster — required by Matter spec, uses logging only (no LED). */
-Identify sIdentify = {kThermostatEndpointId, AppTask::IdentifyStartHandler,
-                      AppTask::IdentifyStopHandler, Clusters::Identify::IdentifyTypeEnum::kNone};
+/* Identify cluster — new ServerClusterInterface model (NCS v3.3.0 / CHIP SDK 2.9.x).
+ * ZAP marks Identify attributes EXTERNAL_STORAGE, so they must be served by a registered
+ * ServerClusterInterface; the legacy Identify shim silently swallows Register() errors.
+ * Using RegisteredServerCluster directly mirrors the NCS thermostat sample pattern and
+ * surfaces any registration failure. Endpoints 1-3 all carry Identify in the ZAP config. */
+
+chip::app::DefaultTimerDelegate gIdTimer1, gIdTimer2, gIdTimer3;
+chip::app::RegisteredServerCluster<chip::app::Clusters::IdentifyCluster>
+    gIdCluster1(chip::app::Clusters::IdentifyCluster::Config(1, gIdTimer1)),
+    gIdCluster2(chip::app::Clusters::IdentifyCluster::Config(2, gIdTimer2)),
+    gIdCluster3(chip::app::Clusters::IdentifyCluster::Config(3, gIdTimer3));
+
 } /* namespace */
-
-void AppTask::IdentifyStartHandler(Identify *) {
-    LOG_INF("Identify start");
-}
-
-void AppTask::IdentifyStopHandler(Identify *) {
-    LOG_INF("Identify stop");
-}
 
 CHIP_ERROR AppTask::Init() {
     /* Derive discriminator + SPAKE2+ passcode from FICR hardware ID. */
@@ -55,6 +58,20 @@ CHIP_ERROR AppTask::Init() {
     /* Initialize and start the Matter server. */
     ReturnErrorOnFailure(Nrf::Matter::PrepareServer());
     ReturnErrorOnFailure(Nrf::Matter::StartServer());
+
+    /* Register Identify clusters for all endpoints that declare them in the ZAP config.
+     * Must happen after StartServer() so the registry context is set and Startup() fires. */
+    {
+        auto & reg = CodegenDataModelProvider::Instance().Registry();
+        for (auto * entry : { &gIdCluster1.Registration(),
+                               &gIdCluster2.Registration(),
+                               &gIdCluster3.Registration() }) {
+            CHIP_ERROR err = reg.Register(*entry);
+            if (err != CHIP_NO_ERROR) {
+                LOG_ERR("Identify Register failed: %" CHIP_ERROR_FORMAT, err.Format());
+            }
+        }
+    }
 
     /* Initialize IR driver (PWM-based 38kHz carrier on P0.02). */
     int ret = ir_driver_init();

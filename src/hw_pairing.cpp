@@ -91,7 +91,8 @@ private:
     uint32_t mPasscode      = 0;
     uint8_t  mSalt[kSaltLen];
     uint8_t  mVerifier[kVerifierLen];
-    bool     mReady = false;
+    bool     mRawReady     = false;
+    bool     mVerifierReady = false;
 };
 
 HwCommissionableDataProvider gProvider;
@@ -123,16 +124,7 @@ CHIP_ERROR HwCommissionableDataProvider::Init()
         memcpy(mSalt + (i * 4), &hs, 4);
     }
 
-    /* Compute the SPAKE2+ verifier (involves PBKDF2-SHA256 — ~100–500 ms). */
-    Spake2pVerifier verifier;
-    ReturnErrorOnFailure(verifier.Generate(kIterations,
-                                           ByteSpan(mSalt, kSaltLen),
-                                           mPasscode));
-
-    MutableByteSpan verifierSpan(mVerifier, kVerifierLen);
-    ReturnErrorOnFailure(verifier.Serialize(verifierSpan));
-
-    mReady = true;
+    mRawReady = true;
 
     LOG_INF("HW pairing: discriminator=%04u  passcode=%08u",
             mDiscriminator, mPasscode);
@@ -141,7 +133,7 @@ CHIP_ERROR HwCommissionableDataProvider::Init()
 
 CHIP_ERROR HwCommissionableDataProvider::GetSetupDiscriminator(uint16_t & discriminator)
 {
-    VerifyOrReturnError(mReady, CHIP_ERROR_INCORRECT_STATE);
+    VerifyOrReturnError(mRawReady, CHIP_ERROR_INCORRECT_STATE);
     discriminator = mDiscriminator;
     return CHIP_NO_ERROR;
 }
@@ -154,7 +146,7 @@ CHIP_ERROR HwCommissionableDataProvider::GetSpake2pIterationCount(uint32_t & ite
 
 CHIP_ERROR HwCommissionableDataProvider::GetSpake2pSalt(MutableByteSpan & saltBuf)
 {
-    VerifyOrReturnError(mReady, CHIP_ERROR_INCORRECT_STATE);
+    VerifyOrReturnError(mRawReady, CHIP_ERROR_INCORRECT_STATE);
     VerifyOrReturnError(saltBuf.size() >= kSaltLen, CHIP_ERROR_BUFFER_TOO_SMALL);
     memcpy(saltBuf.data(), mSalt, kSaltLen);
     saltBuf.reduce_size(kSaltLen);
@@ -164,7 +156,23 @@ CHIP_ERROR HwCommissionableDataProvider::GetSpake2pSalt(MutableByteSpan & saltBu
 CHIP_ERROR HwCommissionableDataProvider::GetSpake2pVerifier(MutableByteSpan & verifierBuf,
                                                              size_t & verifierLen)
 {
-    VerifyOrReturnError(mReady, CHIP_ERROR_INCORRECT_STATE);
+    VerifyOrReturnError(mRawReady, CHIP_ERROR_INCORRECT_STATE);
+
+    if (!mVerifierReady) {
+        /* PSA is now initialized (called after PrepareServer). */
+        LOG_INF("HW pairing: computing SPAKE2+ verifier (PBKDF2, %u iterations)...", kIterations);
+        Spake2pVerifier verifier;
+        CHIP_ERROR err = verifier.Generate(kIterations, ByteSpan(mSalt, kSaltLen), mPasscode);
+        if (err != CHIP_NO_ERROR) {
+            LOG_ERR("HW pairing: Spake2pVerifier::Generate failed: %" CHIP_ERROR_FORMAT, err.Format());
+            return err;
+        }
+        MutableByteSpan span(mVerifier, kVerifierLen);
+        ReturnErrorOnFailure(verifier.Serialize(span));
+        mVerifierReady = true;
+        LOG_INF("HW pairing: verifier ready");
+    }
+
     VerifyOrReturnError(verifierBuf.size() >= kVerifierLen, CHIP_ERROR_BUFFER_TOO_SMALL);
     memcpy(verifierBuf.data(), mVerifier, kVerifierLen);
     verifierBuf.reduce_size(kVerifierLen);
@@ -174,7 +182,7 @@ CHIP_ERROR HwCommissionableDataProvider::GetSpake2pVerifier(MutableByteSpan & ve
 
 CHIP_ERROR HwCommissionableDataProvider::GetSetupPasscode(uint32_t & passcode)
 {
-    VerifyOrReturnError(mReady, CHIP_ERROR_INCORRECT_STATE);
+    VerifyOrReturnError(mRawReady, CHIP_ERROR_INCORRECT_STATE);
     passcode = mPasscode;
     return CHIP_NO_ERROR;
 }

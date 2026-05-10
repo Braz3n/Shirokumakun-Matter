@@ -45,12 +45,6 @@
       },
       "deviceTypes": [
         {
-          "code": 18,
-          "profileId": 259,
-          "label": "MA-otarequestor",
-          "name": "MA-otarequestor"
-        },
-        {
           "code": 22,
           "profileId": 259,
           "label": "MA-rootdevice",
@@ -58,11 +52,9 @@
         }
       ],
       "deviceVersions": [
-        1,
         3
       ],
       "deviceIdentifiers": [
-        18,
         22
       ],
       "deviceTypeName": "MA-otarequestor",
@@ -3259,7 +3251,7 @@
           "mfgCode": null,
           "define": "WIFI_NETWORK_DIAGNOSTICS_CLUSTER",
           "side": "server",
-          "enabled": 1,
+          "enabled": 0,
           "attributes": [
             {
               "name": "BSSID",

@@ -18,7 +18,7 @@ DOCKER_RUN := docker run --rm \
     -e ZEPHYR_SDK_INSTALL_DIR=/opt/zephyr-sdk-0.17.0 \
     $(DOCKER_IMAGE)
 
-.PHONY: image init build pristine clean dfu format
+.PHONY: image init build pristine clean dfu format generate
 
 # Build the Alpine-based builder image. Run once.
 image:
@@ -61,6 +61,24 @@ clean:
 
 format:
 	clang-format -i $(SRCS)
+
+# Regenerate src/zap-generated/ from ac_controller.zap + ac_controller.matter.
+# Two-step: ZAP tool generates the cluster/endpoint tables; the IDL codegen
+# generates the IM command handler and code-driven callbacks.
+# After running this, inspect the diff and rebuild.
+MATTER_ROOT := /ncs/modules/lib/matter
+
+generate:
+	$(DOCKER_RUN) sh -c "\
+	    python3 $(MATTER_ROOT)/scripts/tools/zap/generate.py \
+	        --zcl $(MATTER_ROOT)/src/app/zap-templates/zcl/zcl.json \
+	        --templates $(MATTER_ROOT)/src/app/zap-templates/app-templates.json \
+	        --output /workspace/src/zap-generated/ \
+	        /workspace/src/ac_controller.zap && \
+	    python3 $(MATTER_ROOT)/scripts/codegen.py \
+	        --generator cpp-app \
+	        --output-dir /workspace/src/zap-generated/ \
+	        /workspace/src/ac_controller.matter"
 
 # DFU runs on the host — mcumgr-client accesses the USB serial port directly.
 DFU_PORT := $(shell for d in /dev/ttyACM*; do \
