@@ -16,6 +16,7 @@
 #include "scd40_manager.h"
 #include "ir_driver.h"
 #include "ir_protocol.h"
+#include "identify_led.h"
 
 using namespace chip;
 using namespace chip::DeviceLayer;
@@ -124,6 +125,15 @@ static int cmd_info(const struct shell *sh, size_t argc, char **argv)
     return 0;
 }
 
+/* matter identify — blink blue LED for 5 s (workaround: Apple Home hides Identify for sensors) */
+static int cmd_identify(const struct shell *sh, size_t argc, char **argv) {
+    ARG_UNUSED(argc);
+    ARG_UNUSED(argv);
+    identify_led_trigger();
+    shell_print(sh, "Blinking blue LED for 5 s");
+    return 0;
+}
+
 /* matter reset — clear all fabrics and reboot into unpaired state */
 static int cmd_reset(const struct shell *sh, size_t argc, char **argv) {
     ARG_UNUSED(argc);
@@ -200,9 +210,10 @@ static int cmd_matter(const struct shell *sh, size_t argc, char **argv) {
 
 SHELL_STATIC_SUBCMD_SET_CREATE(
     sub_matter,
-    SHELL_CMD_ARG(info,  NULL, "Print Basic Information cluster attributes", cmd_info,  1, 0),
-    SHELL_CMD_ARG(reset, NULL, "Factory reset (clears all pairing data)",    cmd_reset, 1, 0),
-    SHELL_CMD_ARG(qr,    NULL, "Print QR code and manual pairing code",      cmd_qr,    1, 0),
+    SHELL_CMD_ARG(identify, NULL, "Blink blue LED for 5 s",                     cmd_identify, 1, 0),
+    SHELL_CMD_ARG(info,     NULL, "Print Basic Information cluster attributes",  cmd_info,     1, 0),
+    SHELL_CMD_ARG(reset,    NULL, "Factory reset (clears all pairing data)",     cmd_reset,    1, 0),
+    SHELL_CMD_ARG(qr,       NULL, "Print QR code and manual pairing code",       cmd_qr,       1, 0),
     SHELL_SUBCMD_SET_END);
 SHELL_CMD_REGISTER(matter, &sub_matter, "Matter pairing commands", cmd_matter);
 

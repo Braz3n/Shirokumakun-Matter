@@ -37,6 +37,7 @@ target_sources(app PRIVATE
     src/scd40_manager.cpp
     src/pdm_manager.cpp
     src/shell_commands.cpp
+    src/identify_led.cpp
     src/qrcodegen.c
 )
 
@@ -50,6 +51,7 @@ set_source_files_properties(
     src/scd40_manager.cpp
     src/pdm_manager.cpp
     src/shell_commands.cpp
+    src/identify_led.cpp
     PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Werror;-Wno-unused-parameter;-Wno-missing-field-initializers"
 )
 

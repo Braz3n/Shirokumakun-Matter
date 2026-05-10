@@ -14,6 +14,7 @@
 
 #include "app/matter_init.h"
 #include "app/task_executor.h"
+#include "identify_led.h"
 
 #include <app/DefaultTimerDelegate.h>
 #include <app/clusters/identify-server/IdentifyCluster.h>
@@ -45,9 +46,15 @@ constexpr EndpointId kThermostatEndpointId = 1;
 
 chip::app::DefaultTimerDelegate gIdTimer1, gIdTimer2, gIdTimer3;
 chip::app::RegisteredServerCluster<chip::app::Clusters::IdentifyCluster>
-    gIdCluster1(chip::app::Clusters::IdentifyCluster::Config(1, gIdTimer1)),
-    gIdCluster2(chip::app::Clusters::IdentifyCluster::Config(2, gIdTimer2)),
-    gIdCluster3(chip::app::Clusters::IdentifyCluster::Config(3, gIdTimer3));
+    gIdCluster1(chip::app::Clusters::IdentifyCluster::Config(1, gIdTimer1)
+        .WithDelegate(&identify_led_delegate())
+        .WithIdentifyType(chip::app::Clusters::Identify::IdentifyTypeEnum::kVisibleIndicator)),
+    gIdCluster2(chip::app::Clusters::IdentifyCluster::Config(2, gIdTimer2)
+        .WithDelegate(&identify_led_delegate())
+        .WithIdentifyType(chip::app::Clusters::Identify::IdentifyTypeEnum::kVisibleIndicator)),
+    gIdCluster3(chip::app::Clusters::IdentifyCluster::Config(3, gIdTimer3)
+        .WithDelegate(&identify_led_delegate())
+        .WithIdentifyType(chip::app::Clusters::Identify::IdentifyTypeEnum::kVisibleIndicator));
 
 } /* namespace */
 
